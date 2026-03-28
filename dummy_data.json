@@ -1,0 +1,29 @@
+{
+  "movie_list": [
+    {"movie_id": 1, "movie_title": "파묘", "release_year": 2024},
+    {"movie_id": 2, "movie_title": "듄: 파트 2", "release_year": 2024}
+  ],
+  "batch_response": {
+    "job_id": "JOB_20260328_01",
+    "status": "success"
+  },
+  "result_data": {
+    "movie_title": "파묘",
+    "analysis_date": "2026-03-28",
+    "total_reviews": 1413,
+    "review_summary": [
+      {
+        "label": "연기력",
+        "count": 800,
+        "ratio": 56.6,
+        "examples": ["최민식 연기 압권", "김고은 대살굿 소름"]
+      },
+      {
+        "label": "영상미",
+        "count": 400,
+        "ratio": 28.3,
+        "examples": ["음산한 분위기 연출 대박", "미장센이 미쳤음"]
+      }
+    ]
+  }
+}
