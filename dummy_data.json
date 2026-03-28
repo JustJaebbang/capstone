@@ -3,20 +3,23 @@
     {
       "movie_id": "1",
       "movie_title": "파묘",
+      "source": "naver",
+      "is_active": true,
+      "registered_at": "2026-03-25T10:00:00Z",
+      "updated_at": "2026-03-28T14:00:00Z",
       "release_year": "2024",
-      "is_active": true
-    },
-    {
-      "movie_id": "2",
-      "movie_title": " Dune: Part Two",
-      "release_year": "2024",
-      "is_active": true
+      "notes": "천만 관객 돌파 영화"
     }
   ],
   "batch_response": {
     "job_id": "JOB_20260328_001",
-    "status": "success",
-    "is_completed": true
+    "movie_id": "1",
+    "movie_title": "파묘",
+    "target_date": "2026-03-28",
+    "status": "completed",
+    "created_at": "2026-03-28T14:00:00Z",
+    "started_at": "2026-03-28T14:01:00Z",
+    "finished_at": "2026-03-28T14:10:00Z"
   },
   "result_data": {
     "movie_id": "1",
@@ -28,19 +31,7 @@
         "label": "연기력",
         "count": 800,
         "ratio": 56.6,
-        "examples": [
-          "최민식 연기 압권",
-          "김고은 대살굿 소름"
-        ]
-      },
-      {
-        "label": "영상미",
-        "count": 400,
-        "ratio": 28.3,
-        "examples": [
-          "음산한 분위기 연출 대박",
-          "미장센이 미쳤음"
-        ]
+        "examples": ["최민식 연기 압권", "김고은 대살굿 소름"]
       }
     ]
   }
