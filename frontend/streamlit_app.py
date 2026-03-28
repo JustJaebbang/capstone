@@ -1,13 +1,19 @@
 import streamlit as st
 import json
 import time
-from datetime import datetime # 날짜 처리를 위해 추가
+import os
+from datetime import datetime
+
+# 🚨 [프로 팁] 현재 파일(streamlit_app.py)과 같은 폴더에 있는 dummy_data.json을 안전하게 찾는 방법
+current_dir = os.path.dirname(os.path.abspath(__file__))
+file_path = os.path.join(current_dir, 'dummy_data.json')
 
 def get_all_data():
     try:
-        with open('dummy_data.json', 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
+        st.error(f"🚨 {file_path} 파일을 찾을 수 없습니다!")
         return None
 
 data = get_all_data()
@@ -15,6 +21,9 @@ data = get_all_data()
 st.sidebar.title("🎬 영화 분석 시스템")
 menu = st.sidebar.radio("메뉴 이동", ["1. 영화 목록", "2. 분석 요청(배치)", "3. 분석 결과 보기"])
 
+# ---------------------------------------------------
+# [메뉴 1] 영화 목록 
+# ---------------------------------------------------
 if menu == "1. 영화 목록":
     st.title("🍿 분석 대상 영화 목록")
     for movie in data["movie_list"]:
@@ -28,13 +37,15 @@ if menu == "1. 영화 목록":
             if col2.button("선택", key=f"btn_{movie['movie_id']}"):
                 st.toast(f"'{movie['movie_title']}'가 선택되었습니다.")
 
+# ---------------------------------------------------
+# [메뉴 2] 분석 요청(배치)
+# ---------------------------------------------------
 elif menu == "2. 분석 요청(배치)":
     st.title("⚙️ 분석 요청하기")
     batch = data['batch_response']
     movie_names = [m['movie_title'] for m in data["movie_list"]]
     selected_movie = st.selectbox("어떤 영화를 분석할까요?", movie_names)
     
-    # 🚨 에러 해결 포인트: datetime.strptime 사용
     t_date = datetime.strptime(batch['target_date'], '%Y-%m-%d')
     target_date = st.date_input("분석 기준 날짜", value=t_date)
     
@@ -46,20 +57,28 @@ elif menu == "2. 분석 요청(배치)":
             time.sleep(0.8)
             st.write("AI 분석 중... (`llm_processing`)")
             time.sleep(1.0)
-            status.update(label=f"✅ 작업 완료! 상태: {batch['status']}", state="complete", expanded=False)
+            status.update(label="✅ 작업 완료! 상태: completed", state="complete", expanded=False)
         st.success(f"요청 성공! Job ID: `{batch['job_id']}`")
 
+# ---------------------------------------------------
+# [메뉴 3] 분석 결과 보기
+# ---------------------------------------------------
 elif menu == "3. 분석 결과 보기":
     res = data["result_data"]
     st.title(f"📊 {res['movie_title']} 분석 결과")
-    clean_date = res['analysis_date'].split('T')[0]
-    st.write(f"**총 리뷰:** {res['total_reviews']}건 | **최종 분석일:** {clean_date}")
+    
+    # 🚨 스키마 변경 반영: 날짜에 T가 없어졌으므로 바로 출력!
+    st.write(f"**총 리뷰:** {res['total_reviews']}건 | **최종 분석일:** {res['analysis_date']}")
     st.divider()
+    
     col1, col2 = st.columns(2)
     cards = [col1, col2]
+    
     for i, item in enumerate(res["review_summary"]):
         with cards[i % 2]:
-            st.success(f"**{item['label']} ({item['ratio']}%)**")
+            # 🚨 스키마 변경 반영: 0.8 -> 80% 로 계산해서 예쁘게 보여주기
+            percent = int(item['ratio'] * 100)
+            st.success(f"**{item['label']} ({percent}%)**")
             st.write(f"📈 건수: {item['count']}건")
             with st.expander("대표 리뷰 보기"):
                 for example in item['examples']:
