@@ -4,8 +4,7 @@ from typing import List
 
 from app.schemas import DatasetReviewSchema
 
-DATASET_PATH = Path("../../data/reviews_dataset.json")
-
+DATASET_PATH = Path(__file__).resolve().parents[2] / "data" / "reviews_dataset.json"
 
 def load_all_reviews() -> List[DatasetReviewSchema]:
     if not DATASET_PATH.exists():
