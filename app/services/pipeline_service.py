@@ -1,7 +1,10 @@
 from app.schemas import LLMRequestSchema, ReviewItem
 from app.services.job_service import get_job, update_job_status
 from app.services.review_service import collect_reviews
-from app.services.llm_service import extract_key_phrases_dummy, extract_key_phrases_openai
+from app.services.llm_service import (
+    LLM_MODE,
+    extract_key_phrases_by_mode,
+)
 
 
 def build_llm_request(job) -> LLMRequestSchema:
@@ -24,7 +27,7 @@ def build_llm_request(job) -> LLMRequestSchema:
     )
 
 
-def run_llm_pipeline_for_job(job_id: str, use_openai: bool = False):
+def run_llm_pipeline_for_job(job_id: str):
     job = get_job(job_id)
     if job is None:
         raise ValueError(f"Job not found: {job_id}")
@@ -34,11 +37,16 @@ def run_llm_pipeline_for_job(job_id: str, use_openai: bool = False):
 
     update_job_status(job_id, "llm_processing")
     payload = llm_request.model_dump(mode="json")
+    print(
+        f"[LLM] pipeline start: job_id={job_id}, mode={LLM_MODE}, review_count={len(llm_request.reviews)}",
+        flush=True,
+    )
 
-    if use_openai:
-        llm_result = extract_key_phrases_openai(payload)
-    else:
-        llm_result = extract_key_phrases_dummy(payload)
+    llm_result = extract_key_phrases_by_mode(payload, mode=LLM_MODE)
+    print(
+        f"[LLM] pipeline done: job_id={job_id}, mode={LLM_MODE}, result_count={len(llm_result.get('results', []))}",
+        flush=True,
+    )
 
     update_job_status(job_id, "completed")
     return llm_result
