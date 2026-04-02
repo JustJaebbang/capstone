@@ -4,6 +4,7 @@ from app.schemas import LLMRequestSchema, ReviewItem
 from app.services.job_service import get_job, update_job_status
 from app.services.llm_service import extract_key_phrases_dummy, extract_key_phrases_openai
 from app.services.review_service import fetch_reviews
+from app.services.result_service import save_llm_result
 
 def build_llm_request(
     job, 
@@ -69,9 +70,11 @@ def run_llm_pipeline_for_job(
         )
     payload = llm_request.model_dump(mode="json")
 
-    print(f"[Pipeline] source_mode={source_mode}")
-    print(f"[Pipeline] llm_mode={llm_mode}")
-    print(f"[Pipeline] selected reviews={len(payload['reviews'])}")
+    print(f"[Pipeline] source_mode = {source_mode}")
+    print(f"[Pipeline] llm_mode = {llm_mode}")
+    
+    total_reviews = len(payload["reviews"])
+    print(f"[Pipeline] selected reviews = {total_reviews}")
 
     # 2. C 호출
     llm_result = call_llm_api(payload, llm_mode=llm_mode)
@@ -84,7 +87,13 @@ def run_llm_pipeline_for_job(
         raise ValueError(
             f"LLM result count mismatch: input={input_count}, output={output_count}"
         )
-
+    
+    save_llm_result(
+        job_id=job.job_id,
+        movie_id=job.movie_id,
+        result_data=llm_result,
+    )
     print(f"[Pipeline] llm results received: {output_count}")
-
+    print("[Pipeline] llm_results saved")
+    
     return llm_result
