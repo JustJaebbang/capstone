@@ -1,18 +1,26 @@
 from fastapi import APIRouter, HTTPException
 
-from app.services.review_service import collect_reviews
+from app.services.review_service import fetch_reviews
 
-router = APIRouter(prefix="/movies", tags=["reviews"])
+router = APIRouter(prefix="/debug", tags=["debug"])
 
 
-@router.get("/{movie_id}/reviews")
-def read_reviews(movie_id: str, limit: int = 5):
+@router.get("/reviews/{movie_id}")
+def preview_reviews(
+    movie_id: str,
+    review_limit: int = 5,
+    source_mode: str = "dataset",
+):
     try:
-        reviews = collect_reviews(movie_id=movie_id, limit=limit)
+        reviews = fetch_reviews(
+            movie_id=movie_id,
+            review_limit=review_limit,
+            source_mode=source_mode,
+        )
+        return reviews
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-    if not reviews:
-        raise HTTPException(status_code=404, detail="No reviews found for this movie")
-
-    return reviews
+    except NotImplementedError as e:
+        raise HTTPException(status_code=501, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

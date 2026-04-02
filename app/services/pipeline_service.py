@@ -1,18 +1,30 @@
+import requests
+
 from app.schemas import LLMRequestSchema, ReviewItem
 from app.services.job_service import get_job, update_job_status
-from app.services.review_service import collect_reviews
 from app.services.llm_service import extract_key_phrases_dummy, extract_key_phrases_openai
+from app.services.review_service import fetch_reviews
 
-
-def build_llm_request(job) -> LLMRequestSchema:
-    dataset_reviews = collect_reviews(movie_id=job.movie_id, limit=150)
+def build_llm_request(
+    job, 
+    review_limit: int = 50, 
+    source_mode: str = "dataset",
+    ) -> LLMRequestSchema:
+    """
+    리뷰 데이터 원본(dataset or real)에서 리뷰를 B -> C 요청 스키마로 변환한다.
+    """
+    source_reviews = fetch_reviews(
+        movie_id=job.movie_id,
+        review_limit=review_limit,
+        source_mode=source_mode,
+    )
 
     reviews = [
         ReviewItem(
             review_id=review.review_id,
             text=review.text,
         )
-        for review in dataset_reviews
+        for review in source_reviews
     ]
 
     return LLMRequestSchema(
@@ -24,21 +36,55 @@ def build_llm_request(job) -> LLMRequestSchema:
     )
 
 
-def run_llm_pipeline_for_job(job_id: str, use_openai: bool = False):
-    job = get_job(job_id)
-    if job is None:
-        raise ValueError(f"Job not found: {job_id}")
+def call_llm_api(payload: dict, llm_mode: str = "rule_based") -> dict:
+    """
+    B -> C 실제 API 호출
+    C는 /llm/extract 엔드포인트를 통해 동작한다.
+    """
+    url = f"http://127.0.0.1:8000/llm/extract?mode={llm_mode}"
 
-    update_job_status(job_id, "collecting_reviews")
-    llm_request = build_llm_request(job)
+    response = requests.post(url, json=payload, timeout=60)
 
-    update_job_status(job_id, "llm_processing")
+    if response.status_code != 200:
+        raise Exception(f"LLM API failed: {response.status_code}, {response.text}")
+
+    return response.json()
+
+
+
+def run_llm_pipeline_for_job(
+    job, 
+    review_limit: int = 50, 
+    source_mode: str = "dataset", 
+    llm_mode: str = "rule_based",
+    ) -> dict:
+    """
+    dataset -> B -> C -> B 전체 실행
+    """
+    # 1. 데이터 소스에서 리뷰를 읽고 B → C 스키마 생성
+    llm_request = build_llm_request(
+        job=job, 
+        review_limit=review_limit,
+        source_mode=source_mode,
+        )
     payload = llm_request.model_dump(mode="json")
 
-    if use_openai:
-        llm_result = extract_key_phrases_openai(payload)
-    else:
-        llm_result = extract_key_phrases_dummy(payload)
+    print(f"[Pipeline] source_mode={source_mode}")
+    print(f"[Pipeline] llm_mode={llm_mode}")
+    print(f"[Pipeline] selected reviews={len(payload['reviews'])}")
 
-    update_job_status(job_id, "completed")
+    # 2. C 호출
+    llm_result = call_llm_api(payload, llm_mode=llm_mode)
+    
+    # 3. 입력 리뷰 수 == 출력 결과 수 검증
+    input_count = len(payload["reviews"])
+    output_count = len(llm_result["results"])
+
+    if input_count != output_count:
+        raise ValueError(
+            f"LLM result count mismatch: input={input_count}, output={output_count}"
+        )
+
+    print(f"[Pipeline] llm results received: {output_count}")
+
     return llm_result
