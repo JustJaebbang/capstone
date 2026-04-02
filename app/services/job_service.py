@@ -23,8 +23,7 @@ def list_jobs() -> List[BatchJobSchema]:
 
 
 def get_job(job_id: str) -> Optional[BatchJobSchema]:
-    jobs = list_jobs()
-    for job in jobs:
+    for job in list_jobs():
         if job.job_id == job_id:
             return job
     return None
@@ -45,3 +44,26 @@ def create_job(payload: CreateBatchJobRequest, movie_title: str) -> BatchJobSche
     jobs.append(new_job.model_dump(mode="json"))
     _write_jobs(jobs)
     return new_job
+
+
+def update_job_status(job_id: str, new_status: str) -> None:
+    jobs = _read_jobs()
+    updated = False
+
+    for job in jobs:
+        if job["job_id"] == job_id:
+            job["status"] = new_status
+
+            if new_status != "queued" and job["started_at"] is None:
+                job["started_at"] = datetime.now().isoformat()
+
+            if new_status in ["completed", "failed"]:
+                job["finished_at"] = datetime.now().isoformat()
+
+            updated = True
+            break
+
+    if not updated:
+        raise ValueError(f"Job not found: {job_id}")
+
+    _write_jobs(jobs)

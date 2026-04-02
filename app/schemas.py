@@ -16,6 +16,13 @@ JobStatus = Literal[
     "failed",
 ]
 
+# 데이터셋용 리뷰 스키마
+class DatasetReviewSchema(BaseModel):
+    movie_id: str
+    movie_title: str
+    source: str
+    review_id: str
+    text: str
 
 class MovieSchema(BaseModel):
     movie_id: str = Field(..., examples=["mv_001"])
