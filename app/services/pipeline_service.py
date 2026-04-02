@@ -1,10 +1,10 @@
 import requests
 
-from app.schemas import LLMRequestSchema, ReviewItem
+from app.schemas import LLMRequestSchema, ReviewItem, ClusterRequestSchema, PhraseItem
 from app.services.job_service import get_job, update_job_status
 from app.services.llm_service import extract_key_phrases_dummy, extract_key_phrases_openai
 from app.services.review_service import fetch_reviews
-from app.services.result_service import save_llm_result
+from app.services.result_service import save_llm_result, get_llm_result_by_job_id
 
 def build_llm_request(
     job, 
@@ -97,3 +97,43 @@ def run_llm_pipeline_for_job(
     print("[Pipeline] llm_results saved")
     
     return llm_result
+
+
+def build_cluster_request_from_llm_result(job, llm_result: dict) -> ClusterRequestSchema:
+    """
+    C->B 결과를 B->D 요청 스키마로 변환
+    """
+    phrases = []
+
+    for result_item in llm_result["results"]:
+        review_id = result_item["review_id"]
+
+        for phrase_text in result_item["key_phrases"]:
+            phrases.append(
+                PhraseItem(
+                    review_id=review_id,
+                    text=phrase_text,
+                )
+            )
+
+    return ClusterRequestSchema(
+        job_id=job.job_id,
+        movie_id=job.movie_id,
+        movie_title=job.movie_title,
+        phrases=phrases,
+    )
+
+
+def build_cluster_request_for_job(job) -> ClusterRequestSchema:
+    """
+    저장된 llm_results.json에서 해당 job의 결과를 읽고
+    B->D 요청 스키마로 변환
+    """
+    llm_saved = get_llm_result_by_job_id(job.job_id)
+    
+    if llm_saved is None:
+        raise ValueError(f"LLM result not found for job_id={job.job_id}")
+
+    llm_result = llm_saved["result"]
+    
+    return build_cluster_request_from_llm_result(job=job, llm_result=llm_result)

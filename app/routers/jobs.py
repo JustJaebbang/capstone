@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from app.schemas import CreateBatchJobRequest, CreateBatchJobResponse, JobStatusResponse
 from app.services.job_service import create_job, get_job
 from app.services.movie_service import get_movies
-from app.services.pipeline_service import run_llm_pipeline_for_job
+from app.services.pipeline_service import run_llm_pipeline_for_job, build_cluster_request_for_job
 
 
 router = APIRouter(prefix="/batch/jobs", tags=["jobs"])
@@ -29,7 +29,7 @@ def read_job_status(job_id: str):
     
     return JobStatusResponse(job_id=job.job_id, status=job.status)
 
-@router.post("/{job_id}/run")
+@router.post("/{job_id}/run-llm")
 def run_batch_job(
     job_id: str,
     review_limit: int = 50,
@@ -61,3 +61,20 @@ def run_batch_job(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.get("/{job_id}/cluster-request")
+def get_cluster_request(job_id: str):
+    """
+    저장된 llm_results를 읽어서 B->D 요청 스키마를 생성
+    """
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        cluster_request = build_cluster_request_for_job(job)
+        return cluster_request.model_dump(mode="json")
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

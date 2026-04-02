@@ -38,6 +38,16 @@ def save_llm_result(job_id: str, movie_id: str, result_data: dict) -> None:
     _write_json_array(LLM_RESULTS_PATH, data)
 
 
+def get_llm_result_by_job_id(job_id: str) -> Optional[dict]:
+    data = _read_json_array(LLM_RESULTS_PATH)
+
+    for item in data:
+        if item.get("job_id") == job_id:
+            return item
+
+    return None
+
+
 def save_cluster_result(job_id: str, movie_id: str, result_data: dict) -> None:
     data = _read_json_array(CLUSTER_RESULTS_PATH)
 
