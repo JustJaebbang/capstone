@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.schemas import LLMRequestSchema, LLMResponseSchema
-from app.services.llm_service import extract_key_phrases
+
 
 router = APIRouter(prefix="/llm", tags=["llm"])
 
