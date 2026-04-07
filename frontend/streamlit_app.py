@@ -21,7 +21,7 @@ st.markdown("""
         border-radius: 12px !important;
         padding: 8px 16px !important;
         font-weight: 600 !important;
-        margin-bottom: 10px !important; /* 타이틀과의 간격 */
+        margin-bottom: 10px !important;
         transition: all 0.2s ease;
     }
     div[data-testid="stSidebar"] [data-testid="stButton"] button:hover {
@@ -40,9 +40,13 @@ st.markdown("""
         border-radius: 10px !important;
         cursor: pointer !important;
         transition: all 0.2s ease-in-out !important;
-        justify-content: flex-start !important; 
+        justify-content: flex-start !important;
         align-items: center !important;
         text-align: left !important;
+    }
+    div[role="radiogroup"] label:hover {
+        background-color: #d1d5db !important;
+        border-color: #9ca3af !important;
     }
 
     /* ❌ 유령 여백 및 빨간 원 완전 제거 */
@@ -64,7 +68,7 @@ st.markdown("""
 
     /* ✅ 선택된 상태 비주얼 */
     div[role="radiogroup"] label[data-checked="true"] {
-        background-color: #2e7d32 !important; 
+        background-color: #2e7d32 !important;
         border-color: #1b5e20 !important;
     }
     div[role="radiogroup"] label[data-checked="true"] p {
@@ -80,6 +84,77 @@ st.markdown("""
         border-color: #8c92a1 !important;
         background-color: #fafbfc !important;
     }
+
+    /* ✨ 영화 카드 스타일 */
+    .movie-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        background: #ffffff;
+        border: 0.5px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 10px;
+        transition: border-color 0.15s ease;
+    }
+    .movie-card:hover {
+        border-color: #adb5bd;
+        background-color: #fafbfc;
+    }
+    .movie-thumb {
+        width: 48px;
+        height: 64px;
+        border-radius: 6px;
+        background: #f1f3f5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        flex-shrink: 0;
+    }
+    .movie-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .movie-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #1a1a2e;
+        margin: 0 0 6px 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .movie-badges {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 4px;
+    }
+    .badge-year {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: 500;
+        background: #f1f3f5;
+        color: #6c757d;
+        border: 0.5px solid #dee2e6;
+    }
+    .badge-source {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: 500;
+        background: #e7f1ff;
+        color: #1971c2;
+    }
+    .movie-id {
+        font-size: 11px;
+        color: #adb5bd;
+        font-family: monospace;
+        margin: 0;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -88,29 +163,45 @@ with open(DUMMY_PATH, 'r', encoding='utf-8') as f:
 
 # 2. 세션 상태 초기화
 if 'selected_movie_id' not in st.session_state:
-    st.session_state.selected_movie_id = FALLBACK_DATA["movie_list"][0]["movie_id"]
+    st.session_state.selected_movie_id = None
 if 'selected_label' not in st.session_state:
     st.session_state.selected_label = None
+if 'auto_start' not in st.session_state:
+    st.session_state.auto_start = False
+if 'current_menu' not in st.session_state:
+    st.session_state.current_menu = "1. 영화 목록"
+if 'analysis_done' not in st.session_state:
+    st.session_state.analysis_done = False
+
+# 영화 장르별 이모지 매핑
+MOVIE_EMOJI = ["🎬", "🍿", "🎥", "🎞️", "📽️", "🎭", "🌟", "🚀"]
+MENU_OPTIONS = ["1. 영화 목록", "2. 분석 요청(배치)", "3. 분석 결과 보기"]
 
 # ---------------------------------------------------
-# 🚨 사이드바 구성 (순서 변경: Home 버튼 -> 타이틀 -> 메뉴)
+# 🚨 사이드바 구성
 # ---------------------------------------------------
-
-# 1단계: 최상단 Home 버튼
 if st.sidebar.button("🏠 Home", use_container_width=True, key="home_btn"):
-    st.session_state.main_menu = "1. 영화 목록"
+    st.session_state.current_menu = "1. 영화 목록"
     st.session_state.selected_label = None
     st.rerun()
 
-# 2단계: 타이틀
 st.sidebar.title("🎬 영화 분석 시스템")
-
-# 3단계: 메뉴 이동 라디오 버튼
-menu = st.sidebar.radio("메뉴 이동", ["1. 영화 목록", "2. 분석 요청(배치)", "3. 분석 결과 보기"], key="main_menu")
+menu_radio = st.sidebar.radio(
+    "메뉴 이동",
+    MENU_OPTIONS,
+    index=MENU_OPTIONS.index(st.session_state.current_menu),
+    key="main_menu_radio"
+)
+# 사용자가 직접 사이드바 클릭 시에만 current_menu 업데이트
+if st.session_state.get("_prev_menu_radio") != menu_radio:
+    if st.session_state.get("_prev_menu_radio") is not None:
+        st.session_state.current_menu = menu_radio
+st.session_state["_prev_menu_radio"] = menu_radio
+menu = st.session_state.current_menu
 
 
 # ---------------------------------------------------
-# [메뉴 1] 영화 목록 
+# [메뉴 1] 영화 목록 - 개선된 카드 UI
 # ---------------------------------------------------
 if menu == "1. 영화 목록":
     st.title("🍿 분석 대상 영화 목록")
@@ -123,18 +214,42 @@ if menu == "1. 영화 목록":
         movie_list = FALLBACK_DATA["movie_list"]
         st.warning("⚠️ 서버 연결 실패. 더미 데이터를 표시합니다.")
 
-    for movie in movie_list:
-        with st.container(border=True):
-            col1, col2 = st.columns([4, 1])
-            col1.subheader(f"{movie['movie_title']} ({movie['release_year']})")
-            col1.write(f"🆔 ID: `{movie['movie_id']}` | 🌐 출처: `{movie['source']}`")
-            if col2.button("선택", key=f"sel_{movie['movie_id']}"):
+    for i, movie in enumerate(movie_list):
+        emoji = MOVIE_EMOJI[i % len(MOVIE_EMOJI)]
+        is_selected = st.session_state.selected_movie_id is not None and st.session_state.selected_movie_id == movie['movie_id']
+
+        # 카드 HTML 렌더링
+        st.markdown(f"""
+        <div class="movie-card">
+            <div class="movie-thumb">{emoji}</div>
+            <div class="movie-info">
+                <p class="movie-title">{movie['movie_title']}</p>
+                <div class="movie-badges">
+                    <span class="badge-year">{movie['release_year']}</span>
+                    <span class="badge-source">{movie['source']}</span>
+                </div>
+                <p class="movie-id">{movie['movie_id']}</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # 선택 버튼 (카드 오른쪽에 붙도록 columns 활용)
+        col1, col2 = st.columns([5, 1])
+        with col2:
+            btn_label = "✓ 선택됨" if is_selected else "선택"
+            btn_type = "primary" if is_selected else "secondary"
+            if st.button(btn_label, key=f"sel_{movie['movie_id']}", use_container_width=True, type=btn_type):
                 st.session_state.selected_movie_id = movie['movie_id']
                 st.session_state.selected_label = None
-                st.toast(f"'{movie['movie_title']}' 선택됨")
+                st.session_state.auto_start = True
+                st.session_state.current_menu = "2. 분석 요청(배치)"
+                st.rerun()
+
+        st.markdown("<div style='margin-bottom: -12px'></div>", unsafe_allow_html=True)
+
 
 # ---------------------------------------------------
-# [메뉴 2] 분석 요청 
+# [메뉴 2] 분석 요청
 # ---------------------------------------------------
 elif menu == "2. 분석 요청(배치)":
     st.title("⚙️ 분석 요청하기")
@@ -147,7 +262,11 @@ elif menu == "2. 분석 요청(배치)":
     current_idx = next((i for i, m in enumerate(m_list) if m['movie_id'] == st.session_state.selected_movie_id), 0)
     selected_title = st.selectbox("분석 대상 영화", movie_names, index=current_idx)
     target_date = st.date_input("기준 날짜", value=datetime.now())
-    if st.button("🚀 분석 시작"):
+
+    # 영화 목록에서 선택 시 자동 실행, 아니면 버튼 클릭 시 실행
+    should_run = st.session_state.auto_start
+    if st.button("🚀 분석 시작") or should_run:
+        st.session_state.auto_start = False  # 플래그 초기화
         payload = {"movie_id": st.session_state.selected_movie_id, "target_date": str(target_date)}
         with st.status("배치 작업 진행 중...", expanded=True) as status:
             try:
@@ -163,15 +282,27 @@ elif menu == "2. 분석 요청(배치)":
                     curr_status = poll.json()['status']
                     st.write(f"🔄 현재 상태: `{curr_status}`")
                 status.update(label=f"🏁 작업 {curr_status}!", state="complete" if curr_status=="completed" else "error")
+                if curr_status == "completed":
+                    st.session_state.analysis_done = True
             except:
                 st.error("🚨 서버 연결 불가. 시뮬레이션을 시작합니다.")
                 for s in ["queued", "collecting_reviews", "llm_processing", "clustering", "saving_results", "completed"]:
                     st.write(f"🕒 가상 상태: `{s}`")
                     time.sleep(0.5)
                 status.update(label="✅ 시뮬레이션 완료", state="complete")
+                st.session_state.analysis_done = True
+
+    # 분석 완료 후 결과 보기 버튼 (if 블록 밖)
+    if st.session_state.get("analysis_done"):
+        st.success("🎉 분석이 완료되었습니다!")
+        if st.button("📊 분석 결과 보기 →", type="primary", use_container_width=True):
+            st.session_state.analysis_done = False
+            st.session_state.current_menu = "3. 분석 결과 보기"
+            st.rerun()
+
 
 # ---------------------------------------------------
-# [메뉴 3] 분석 결과 
+# [메뉴 3] 분석 결과
 # ---------------------------------------------------
 elif menu == "3. 분석 결과 보기":
     mid = st.session_state.selected_movie_id
@@ -200,10 +331,10 @@ elif menu == "3. 분석 결과 보기":
             with st.container(border=True):
                 if st.button(f"✨ {item['label']}", key=f"btn_{item['label']}", use_container_width=True):
                     if st.session_state.selected_label == item['label']:
-                        st.session_state.selected_label = None 
+                        st.session_state.selected_label = None
                     else:
                         st.session_state.selected_label = item['label']
-                st.progress(float(item['ratio'])) 
+                st.progress(float(item['ratio']))
                 st.caption(f"비중: {int(item['ratio']*100)}% | 건수: {item['count']}건")
                 if st.session_state.selected_label == item['label']:
                     st.divider()
