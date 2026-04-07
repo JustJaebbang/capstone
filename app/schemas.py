@@ -55,24 +55,25 @@ class LLMRequestSchema(BaseModel):
     job_id: str
     movie_id: str
     movie_title: str
-    target_date: date
     reviews: List[ReviewItem]
 
 
 class LLMResultItem(BaseModel):
     review_id: str
-    key_phrases: List[str]
+    phrases: List[PhraseSentimentItem]
 
 
 class LLMResponseSchema(BaseModel):
     job_id: str
     movie_id: str
+    movie_title: str
     results: List[LLMResultItem]
 
 
 class PhraseItem(BaseModel):
     review_id: str
     text: str
+    sentiment: Literal["positive", "negative"]
 
 
 class ClusterRequestSchema(BaseModel):
@@ -82,36 +83,64 @@ class ClusterRequestSchema(BaseModel):
     phrases: List[PhraseItem]
 
 
-class ClusterItem(BaseModel):
-    review_id: str
-    text: str
+# class ClusterGroup(BaseModel):
+#     cluster_id: str
+#     topic: str
+#     sentiment: Literal["positive", "negative"]
+#     count: int
+#     review_count: int
+#     phrases: List[str]
 
 
-class ClusterGroup(BaseModel):
-    cluster_id: int
+# class ClusterResponseSchema(BaseModel):
+#     job_id: str
+#     movie_id: str
+#     movie_title: str
+#     clusters: List[ClusterGroup]
+
+
+class TopOpinionItem(BaseModel):
+    rank: int
     topic: str
-    items: List[ClusterItem]
-
-
-class ClusterResponseSchema(BaseModel):
-    job_id: str
-    movie_id: str
-    clusters: List[ClusterGroup]
-
-
-class ReviewSummaryItem(BaseModel):
+    sentiment: Literal["positive", "negative"]
     label: str
     count: int
-    ratio: float
+
+
+class OpinionGroupItem(BaseModel):
+    cluster_id: str
+    topic: str
+    sentiment: Literal["positive", "negative"]
+    label: str
+    count: int
     examples: List[str]
 
 
+class SentimentRatioSchema(BaseModel):
+    positive_percent: float
+    negative_percent: float
+    positive_review_count: int
+    negative_review_count: int
+    tie_review_count: int
+    total_review_count: int
+    rule: str
+
+
+class FinalSummarySchema(BaseModel):
+    top_opinions: List[TopOpinionItem]
+    sentiment_ratio: SentimentRatioSchema
+
+
+class FinalDetailsSchema(BaseModel):
+    opinion_groups: List[OpinionGroupItem]
+
+
 class FinalResultSchema(BaseModel):
+    job_id: str
     movie_id: str
     movie_title: str
-    analysis_date: date
-    total_reviews: int
-    review_summary: List[ReviewSummaryItem]
+    summary: FinalSummarySchema
+    details: FinalDetailsSchema
 
 
 class CreateBatchJobRequest(BaseModel):
@@ -127,3 +156,16 @@ class CreateBatchJobResponse(BaseModel):
 class JobStatusResponse(BaseModel):
     job_id: str
     status: JobStatus
+
+
+class PhraseSentimentItem(BaseModel):
+    text: str
+    sentiment: Literal["positive", "negative"]
+
+
+TopOpinionItem.model_rebuild()
+OpinionGroupItem.model_rebuild()
+SentimentRatioSchema.model_rebuild()
+FinalSummarySchema.model_rebuild()
+FinalDetailsSchema.model_rebuild()
+FinalResultSchema.model_rebuild()
