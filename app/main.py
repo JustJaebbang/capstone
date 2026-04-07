@@ -5,7 +5,7 @@ from app.routers.jobs import router as jobs_router
 from app.routers.results import router as results_router
 from app.routers.reviews import router as reviews_router
 from app.routers.llm import router as llm_router
-#from app.routers.cluster import router as cluster_router
+from app.routers.cluster import router as cluster_router
 
 app = FastAPI(title="Movie Review Analysis System")
 
@@ -14,7 +14,7 @@ app.include_router(jobs_router)
 app.include_router(results_router)
 app.include_router(reviews_router)
 app.include_router(llm_router)
-#app.include_router(cluster_router)
+app.include_router(cluster_router)
 
 @app.get("/")
 def root():

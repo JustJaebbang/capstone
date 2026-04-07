@@ -83,20 +83,20 @@ class ClusterRequestSchema(BaseModel):
     phrases: List[PhraseItem]
 
 
-# class ClusterGroup(BaseModel):
-#     cluster_id: str
-#     topic: str
-#     sentiment: Literal["positive", "negative"]
-#     count: int
-#     review_count: int
-#     phrases: List[str]
+class ClusterGroup(BaseModel):
+    cluster_id: str
+    topic: str
+    sentiment: Literal["positive", "negative"]
+    count: int
+    review_count: int
+    phrases: List[str]
 
 
-# class ClusterResponseSchema(BaseModel):
-#     job_id: str
-#     movie_id: str
-#     movie_title: str
-#     clusters: List[ClusterGroup]
+class ClusterResponseSchema(BaseModel):
+    job_id: str
+    movie_id: str
+    movie_title: str
+    clusters: List[ClusterGroup]
 
 
 class TopOpinionItem(BaseModel):
