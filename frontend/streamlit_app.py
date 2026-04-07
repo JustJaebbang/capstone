@@ -218,34 +218,28 @@ if menu == "1. 영화 목록":
         emoji = MOVIE_EMOJI[i % len(MOVIE_EMOJI)]
         is_selected = st.session_state.selected_movie_id is not None and st.session_state.selected_movie_id == movie['movie_id']
 
-        # 카드 HTML 렌더링
-        st.markdown(f"""
-        <div class="movie-card">
-            <div class="movie-thumb">{emoji}</div>
-            <div class="movie-info">
-                <p class="movie-title">{movie['movie_title']}</p>
-                <div class="movie-badges">
-                    <span class="badge-year">{movie['release_year']}</span>
-                    <span class="badge-source">{movie['source']}</span>
-                </div>
-                <p class="movie-id">{movie['movie_id']}</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # 선택 버튼 (카드 오른쪽에 붙도록 columns 활용)
-        col1, col2 = st.columns([5, 1])
-        with col2:
-            btn_label = "✓ 선택됨" if is_selected else "선택"
-            btn_type = "primary" if is_selected else "secondary"
-            if st.button(btn_label, key=f"sel_{movie['movie_id']}", use_container_width=True, type=btn_type):
-                st.session_state.selected_movie_id = movie['movie_id']
-                st.session_state.selected_label = None
-                st.session_state.auto_start = True
-                st.session_state.current_menu = "2. 분석 요청(배치)"
-                st.rerun()
-
-        st.markdown("<div style='margin-bottom: -12px'></div>", unsafe_allow_html=True)
+        # 카드 + 버튼을 하나의 container 안에
+        with st.container(border=True):
+            col_thumb, col_info, col_btn = st.columns([1, 6, 2])
+            with col_thumb:
+                st.markdown(f"<div style='font-size:28px; padding: 8px 0;'>{emoji}</div>", unsafe_allow_html=True)
+            with col_info:
+                st.markdown(f"**{movie['movie_title']}**")
+                st.markdown(
+                    f"<span style='font-size:11px; background:#f1f3f5; color:#6c757d; border:0.5px solid #dee2e6; border-radius:20px; padding:2px 8px; margin-right:6px;'>{movie['release_year']}</span>"
+                    f"<span style='font-size:11px; background:#e7f1ff; color:#1971c2; border-radius:20px; padding:2px 8px;'>{movie['source']}</span>",
+                    unsafe_allow_html=True
+                )
+                st.caption(movie['movie_id'])
+            with col_btn:
+                btn_label = "✓ 선택됨" if is_selected else "선택"
+                btn_type = "primary" if is_selected else "secondary"
+                if st.button(btn_label, key=f"sel_{movie['movie_id']}", use_container_width=True, type=btn_type):
+                    st.session_state.selected_movie_id = movie['movie_id']
+                    st.session_state.selected_label = None
+                    st.session_state.auto_start = True
+                    st.session_state.current_menu = "2. 분석 요청(배치)"
+                    st.rerun()
 
 
 # ---------------------------------------------------
