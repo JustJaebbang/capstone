@@ -122,6 +122,9 @@ class OpinionGroupReviewsResponse(BaseModel):
     cluster_id: str
     label: str
     total_count: int
+    page: int
+    page_size: int
+    total_pages: int
     reviews: List[OpinionReviewItem]
 
 

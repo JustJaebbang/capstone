@@ -174,13 +174,24 @@ def get_opinion_groups_api(job_id: str):
 
 
 @router.get("/{job_id}/opinion-groups/{cluster_id}/reviews")
-def get_opinion_group_reviews_api(job_id: str, cluster_id: str):
+def get_opinion_group_reviews_api(
+    job_id: str,
+    cluster_id: str,
+    page: int = 1,
+    page_size: int = 20,
+):
+    
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
     try:
-        result = get_opinion_group_reviews(job, cluster_id)
+        result = get_opinion_group_reviews(
+            job,
+            cluster_id,
+            page=page,
+            page_size=page_size,
+        )
         return result
 
     except ValueError as e:

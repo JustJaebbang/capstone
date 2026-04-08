@@ -228,7 +228,13 @@ def run_final_for_job(job) -> dict:
     return final_result
 
 
-def get_opinion_group_reviews(job, cluster_id: str) -> dict:
+def get_opinion_group_reviews(
+    job,
+    cluster_id: str,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    
     llm_result = get_llm_result_by_job_id(job.job_id)
     if llm_result is None:
         raise ValueError(f"LLM result not found for job_id={job.job_id}")
@@ -259,12 +265,28 @@ def get_opinion_group_reviews(job, cluster_id: str) -> dict:
         source_reviews=source_reviews_data,
     )
 
+    if page < 1:
+        raise ValueError("page must be >= 1")
+
+    if page_size < 1:
+        raise ValueError("page_size must be >= 1")
+
+    total_count = len(reviews)
+    total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+
+    start = (page - 1) * page_size
+    end = start + page_size
+    paged_reviews = reviews[start:end]
+
     response = OpinionGroupReviewsResponse(
         job_id=job.job_id,
         cluster_id=cluster_id,
         label=label,
-        total_count=len(reviews),
-        reviews=reviews,
+        total_count=total_count,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+        reviews=paged_reviews,
     )
 
     return response.model_dump(mode="json")
