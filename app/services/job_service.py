@@ -12,8 +12,15 @@ from app.schemas import (
 from app.services.llm_service import extract_phrases_with_sentiment
 from app.services.cluster_service import build_cluster_request_for_job, run_cluster_module
 from app.services.review_service import fetch_reviews
-from app.services.result_service import save_llm_result, save_cluster_result
+from app.services.result_service import (
+    save_llm_result, 
+    save_cluster_result,
+    save_final_result,
+    get_llm_result_by_job_id,
+    get_cluster_result_by_job_id,
+)
 
+from app.services.final_service import build_final_result
 
 DATA_PATH = Path("data/jobs.json")
 
@@ -172,3 +179,44 @@ def run_cluster_for_job(
     )
 
     return cluster_result
+
+
+def run_final_for_job(job) -> dict:
+    llm_result = get_llm_result_by_job_id(job.job_id)
+    if llm_result is None:
+        raise ValueError(f"LLM result not found for job_id={job.job_id}")
+
+    cluster_result = get_cluster_result_by_job_id(job.job_id)
+    if cluster_result is None:
+        raise ValueError(f"Cluster result not found for job_id={job.job_id}")
+
+    source_reviews = fetch_reviews(
+        movie_id=job.movie_id,
+        review_limit=1000,
+        source_mode="dataset",
+    )
+
+    source_reviews_data = [
+        {
+            "review_id": review.review_id,
+            "text": review.text,
+        }
+        for review in source_reviews
+    ]
+
+    final_response = build_final_result(
+        job=job,
+        llm_result=llm_result,
+        cluster_result=cluster_result,
+        source_reviews=source_reviews_data,
+    )
+    
+    final_result = final_response.model_dump(mode="json")
+
+    save_final_result(
+        job_id=job.job_id,
+        movie_id=job.movie_id,
+        result_data=final_result,
+    )
+
+    return final_result

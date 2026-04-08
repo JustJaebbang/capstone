@@ -53,14 +53,33 @@ def save_cluster_result(job_id: str, movie_id: str, result_data: dict) -> None:
     _write_json_array(CLUSTER_RESULTS_PATH, data)
 
 
-def save_final_result(result: FinalResultSchema) -> None:
+def get_cluster_result_by_job_id(job_id: str):
+    data = _read_json_array(CLUSTER_RESULTS_PATH)
+
+    for item in data:
+        if item.get("job_id") == job_id:
+            return item
+
+    return None
+
+
+def save_final_result(job_id: str, movie_id: str, result_data: dict) -> None:
     data = _read_json_array(FINAL_RESULTS_PATH)
 
-    # 같은 movie_id 결과가 있으면 최신값으로 덮어쓰기
-    data = [item for item in data if item.get("movie_id") != result.movie_id]
+    data = [item for item in data if item.get("job_id") != job_id]
+    data.append(result_data)
 
-    data.append(result.model_dump(mode="json"))
     _write_json_array(FINAL_RESULTS_PATH, data)
+
+
+def get_final_result_by_job_id(job_id: str):
+    data = _read_json_array(FINAL_RESULTS_PATH)
+
+    for item in data:
+        if item.get("job_id") == job_id:
+            return item
+
+    return None
 
 
 def list_final_results() -> List[FinalResultSchema]:

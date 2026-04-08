@@ -114,6 +114,7 @@ class OpinionGroupItem(BaseModel):
     label: str
     count: int
     examples: List[str]
+    reviews: List[OpinionReviewItem]
 
 
 class SentimentRatioSchema(BaseModel):
@@ -161,6 +162,11 @@ class JobStatusResponse(BaseModel):
 class PhraseSentimentItem(BaseModel):
     text: str
     sentiment: Literal["positive", "negative"]
+
+
+class OpinionReviewItem(BaseModel):
+    review_id: str
+    text: str
 
 
 TopOpinionItem.model_rebuild()
