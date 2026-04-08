@@ -10,8 +10,9 @@ from app.schemas import (
     ReviewItem
 )
 from app.services.llm_service import extract_phrases_with_sentiment
+from app.services.cluster_service import build_cluster_request_for_job, run_cluster_module
 from app.services.review_service import fetch_reviews
-from app.services.result_service import save_llm_result
+from app.services.result_service import save_llm_result, save_cluster_result
 
 
 DATA_PATH = Path("data/jobs.json")
@@ -153,3 +154,21 @@ def run_llm_for_job(
     print("[Pipeline] llm_results saved")
     
     return llm_result
+
+
+def run_cluster_for_job(
+    job,
+    cluster_mode: str = "hdbscan",
+) -> dict:
+    cluster_request = build_cluster_request_for_job(job)
+
+    cluster_response = run_cluster_module(cluster_request, mode=cluster_mode)
+    cluster_result = cluster_response.model_dump(mode="json")
+
+    save_cluster_result(
+        job_id=job.job_id,
+        movie_id=job.movie_id,
+        result_data=cluster_result,
+    )
+
+    return cluster_result
