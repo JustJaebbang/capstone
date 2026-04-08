@@ -1,6 +1,7 @@
-from app.schemas import ClusterRequestSchema, PhraseItem
+from app.schemas import ClusterRequestSchema, ClusterResponseSchema, PhraseItem
 from app.services.result_service import get_llm_result_by_job_id
-
+from app.services.clustering_service_hdbscan import cluster_phrases_with_hdbscan
+from app.services.clustering_service_kmeans import cluster_phrases_with_kmeans
 
 def build_cluster_request_from_llm_result(job, llm_result: dict) -> ClusterRequestSchema:
     phrases = []
@@ -37,3 +38,16 @@ def build_cluster_request_for_job(job) -> ClusterRequestSchema:
         job=job,
         llm_result=llm_result,
     )
+
+
+def run_cluster_module(
+    payload: ClusterRequestSchema,
+    mode: str = "hdbscan",
+) -> ClusterResponseSchema:
+    if mode == "hdbscan":
+        return cluster_phrases_with_hdbscan(payload)
+
+    if mode == "kmeans":
+        return cluster_phrases_with_kmeans(payload)
+
+    raise ValueError(f"Unsupported cluster mode: {mode}")

@@ -22,22 +22,6 @@ def _write_json_array(path: Path, data: list[dict]) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-# def save_llm_result(job_id: str, movie_id: str, result_data: dict) -> None:
-#     data = _read_json_array(LLM_RESULTS_PATH)
-
-#     # 같은 job_id 결과가 있으면 덮어쓰기
-#     data = [item for item in data if item.get("job_id") != job_id]
-
-#     data.append(
-#         {
-#             "job_id": job_id,
-#             "movie_id": movie_id,
-#             "result": result_data,
-#         }
-#     )
-#     _write_json_array(LLM_RESULTS_PATH, data)
-
-
 def save_llm_result(job_id: str, movie_id: str, result_data: dict) -> None:
     data = _read_json_array(LLM_RESULTS_PATH)
 
@@ -64,14 +48,8 @@ def save_cluster_result(job_id: str, movie_id: str, result_data: dict) -> None:
     data = _read_json_array(CLUSTER_RESULTS_PATH)
 
     data = [item for item in data if item.get("job_id") != job_id]
+    data.append(result_data)
 
-    data.append(
-        {
-            "job_id": job_id,
-            "movie_id": movie_id,
-            "result": result_data,
-        }
-    )
     _write_json_array(CLUSTER_RESULTS_PATH, data)
 
 
