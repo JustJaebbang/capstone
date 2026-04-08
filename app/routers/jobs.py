@@ -7,6 +7,8 @@ from app.services.job_service import (
     run_llm_for_job, 
     run_cluster_for_job,
     run_final_for_job,
+    get_opinion_group_reviews,
+    get_opinion_groups,
 )
 from app.services.movie_service import get_movies
 from app.services.cluster_service import build_cluster_request_for_job
@@ -152,3 +154,37 @@ def get_final_result(job_id: str):
         raise HTTPException(status_code=404, detail="Final result not found")
 
     return result
+
+
+@router.get("/{job_id}/opinion-groups")
+def get_opinion_groups_api(job_id: str):
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        result = get_opinion_groups(job)
+        return result
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{job_id}/opinion-groups/{cluster_id}/reviews")
+def get_opinion_group_reviews_api(job_id: str, cluster_id: str):
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        result = get_opinion_group_reviews(job, cluster_id)
+        return result
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

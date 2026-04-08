@@ -114,6 +114,14 @@ class OpinionGroupItem(BaseModel):
     label: str
     count: int
     examples: List[str]
+    reviews_preview: List[OpinionReviewItem]
+
+
+class OpinionGroupReviewsResponse(BaseModel):
+    job_id: str
+    cluster_id: str
+    label: str
+    total_count: int
     reviews: List[OpinionReviewItem]
 
 
@@ -132,16 +140,11 @@ class FinalSummarySchema(BaseModel):
     sentiment_ratio: SentimentRatioSchema
 
 
-class FinalDetailsSchema(BaseModel):
-    opinion_groups: List[OpinionGroupItem]
-
-
 class FinalResultSchema(BaseModel):
     job_id: str
     movie_id: str
     movie_title: str
     summary: FinalSummarySchema
-    details: FinalDetailsSchema
 
 
 class CreateBatchJobRequest(BaseModel):
@@ -169,9 +172,22 @@ class OpinionReviewItem(BaseModel):
     text: str
 
 
+class OpinionGroupListItem(BaseModel):
+    cluster_id: str
+    topic: str
+    sentiment: Literal["positive", "negative"]
+    label: str
+    count: int
+
+
+class OpinionGroupListResponse(BaseModel):
+    job_id: str
+    items: List[OpinionGroupListItem]
+    total_count: int
+
+
 TopOpinionItem.model_rebuild()
 OpinionGroupItem.model_rebuild()
 SentimentRatioSchema.model_rebuild()
 FinalSummarySchema.model_rebuild()
-FinalDetailsSchema.model_rebuild()
 FinalResultSchema.model_rebuild()

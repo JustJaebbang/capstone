@@ -3,13 +3,14 @@ from collections import defaultdict
 from app.schemas import (
     FinalResultSchema,
     FinalSummarySchema,
-    FinalDetailsSchema,
     TopOpinionItem,
-    OpinionGroupItem,
+    OpinionGroupListItem,
+    OpinionGroupListResponse,
     OpinionReviewItem,
     SentimentRatioSchema,
 )
 
+REVIEWS_PREVIEW_LIMIT = 10
 
 LABEL_MAP = {
     ("연기", "positive"): "연기가 좋아요",
@@ -134,11 +135,8 @@ def build_final_result(
     llm_result: dict,
     cluster_result: dict,
     source_reviews: list[dict],
-) -> FinalResultSchema:    
-    
+) -> FinalResultSchema:
     top_opinions = []
-    opinion_groups = []
-
     clusters = cluster_result["clusters"]
 
     for idx, cluster in enumerate(clusters[:3], start=1):
@@ -152,25 +150,6 @@ def build_final_result(
             )
         )
 
-    for cluster in clusters:
-        cluster_reviews = collect_reviews_for_cluster(
-            cluster=cluster,
-            llm_result=llm_result,
-            source_reviews=source_reviews,
-        )
-
-        opinion_groups.append(
-            OpinionGroupItem(
-                cluster_id=cluster["cluster_id"],
-                topic=cluster["topic"],
-                sentiment=cluster["sentiment"],
-                label=make_label(cluster["topic"], cluster["sentiment"]),
-                count=cluster["count"],
-                examples=cluster["phrases"],
-                reviews=cluster_reviews,
-            )
-        )
-
     sentiment_ratio = calculate_sentiment_ratio(llm_result)
 
     return FinalResultSchema(
@@ -181,7 +160,45 @@ def build_final_result(
             top_opinions=top_opinions,
             sentiment_ratio=sentiment_ratio,
         ),
-        details=FinalDetailsSchema(
-            opinion_groups=opinion_groups,
-        ),
+    )
+
+
+def get_reviews_for_cluster(
+    job,
+    cluster_id: str,
+    llm_result: dict,
+    cluster_result: dict,
+    source_reviews: list[dict],
+) -> tuple[str, list[OpinionReviewItem]]:
+    for cluster in cluster_result["clusters"]:
+        if cluster["cluster_id"] == cluster_id:
+            label = make_label(cluster["topic"], cluster["sentiment"])
+            reviews = collect_reviews_for_cluster(
+                cluster=cluster,
+                llm_result=llm_result,
+                source_reviews=source_reviews,
+            )
+            return label, reviews
+
+    raise ValueError(f"Cluster not found: {cluster_id}")
+
+
+def build_opinion_group_list(job, cluster_result: dict) -> OpinionGroupListResponse:
+    items = []
+
+    for cluster in cluster_result["clusters"]:
+        items.append(
+            OpinionGroupListItem(
+                cluster_id=cluster["cluster_id"],
+                topic=cluster["topic"],
+                sentiment=cluster["sentiment"],
+                label=make_label(cluster["topic"], cluster["sentiment"]),
+                count=cluster["count"],
+            )
+        )
+
+    return OpinionGroupListResponse(
+        job_id=job.job_id,
+        items=items,
+        total_count=len(items),
     )

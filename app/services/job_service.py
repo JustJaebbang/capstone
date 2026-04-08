@@ -7,7 +7,9 @@ from app.schemas import (
     BatchJobSchema, 
     CreateBatchJobRequest, 
     LLMRequestSchema, 
-    ReviewItem
+    ReviewItem,
+    OpinionGroupReviewsResponse,
+    OpinionGroupListResponse,
 )
 from app.services.llm_service import extract_phrases_with_sentiment
 from app.services.cluster_service import build_cluster_request_for_job, run_cluster_module
@@ -20,7 +22,11 @@ from app.services.result_service import (
     get_cluster_result_by_job_id,
 )
 
-from app.services.final_service import build_final_result
+from app.services.final_service import (
+    build_final_result, 
+    get_reviews_for_cluster,
+    build_opinion_group_list,
+)
 
 DATA_PATH = Path("data/jobs.json")
 
@@ -220,3 +226,58 @@ def run_final_for_job(job) -> dict:
     )
 
     return final_result
+
+
+def get_opinion_group_reviews(job, cluster_id: str) -> dict:
+    llm_result = get_llm_result_by_job_id(job.job_id)
+    if llm_result is None:
+        raise ValueError(f"LLM result not found for job_id={job.job_id}")
+
+    cluster_result = get_cluster_result_by_job_id(job.job_id)
+    if cluster_result is None:
+        raise ValueError(f"Cluster result not found for job_id={job.job_id}")
+
+    source_reviews = fetch_reviews(
+        movie_id=job.movie_id,
+        review_limit=1000,
+        source_mode="dataset",
+    )
+
+    source_reviews_data = [
+        {
+            "review_id": review.review_id,
+            "text": review.text,
+        }
+        for review in source_reviews
+    ]
+
+    label, reviews = get_reviews_for_cluster(
+        job=job,
+        cluster_id=cluster_id,
+        llm_result=llm_result,
+        cluster_result=cluster_result,
+        source_reviews=source_reviews_data,
+    )
+
+    response = OpinionGroupReviewsResponse(
+        job_id=job.job_id,
+        cluster_id=cluster_id,
+        label=label,
+        total_count=len(reviews),
+        reviews=reviews,
+    )
+
+    return response.model_dump(mode="json")
+
+
+def get_opinion_groups(job) -> dict:
+    cluster_result = get_cluster_result_by_job_id(job.job_id)
+    if cluster_result is None:
+        raise ValueError(f"Cluster result not found for job_id={job.job_id}")
+
+    response = build_opinion_group_list(
+        job=job,
+        cluster_result=cluster_result,
+    )
+
+    return response.model_dump(mode="json")
