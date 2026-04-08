@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 
 from collections import Counter, defaultdict
 from typing import Dict, List, Tuple
@@ -33,7 +34,8 @@ class HDBSCANClusteringService:
         min_cluster_size: int = 2,
         min_samples: int | None = 1,
     ) -> None:
-        self.model = SentenceTransformer(model_name)
+        self.model_name = model_name
+        self.model: Optional[SentenceTransformer] = None
         self.min_cluster_size = min_cluster_size
         self.min_samples = min_samples
 
@@ -152,6 +154,9 @@ class HDBSCANClusteringService:
         )
 
     def _embed_texts(self, texts: List[str]) -> np.ndarray:
+        if self.model is None:
+            self.model = SentenceTransformer(self.model_name)
+
         embeddings = self.model.encode(
             texts,
             convert_to_numpy=True,

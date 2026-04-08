@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 
 from collections import defaultdict
 from math import ceil, sqrt
@@ -39,7 +40,8 @@ class KMeansClusteringService:
         max_k: int = 8,
         default_k: int | None = None,
     ) -> None:
-        self.model = SentenceTransformer(model_name)
+        self.model_name = model_name
+        self.model: Optional[SentenceTransformer] = None
         self.random_state = random_state
         self.max_k = max_k
         self.default_k = default_k
@@ -147,6 +149,9 @@ class KMeansClusteringService:
         )
 
     def _embed_texts(self, texts: List[str]) -> np.ndarray:
+        if self.model is None:
+            self.model = SentenceTransformer(self.model_name)
+
         embeddings = self.model.encode(
             texts,
             convert_to_numpy=True,
