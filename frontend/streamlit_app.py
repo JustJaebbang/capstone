@@ -206,6 +206,7 @@ if menu == "1. 영화 목록":
 # ---------------------------------------------------
 # 🚀 [메뉴 2] 분석 요청 (4단계 자동화 버전)
 # ---------------------------------------------------
+# 🚀 [메뉴 2] 분석 요청 (데이터 정합성 버그 수정 완료!)
 elif menu == "2. 분석 요청(배치)":
     st.title("⚙️ 분석 요청하기")
     try:
@@ -213,33 +214,60 @@ elif menu == "2. 분석 요청(배치)":
         m_list = m_res.json()
     except:
         m_list = FALLBACK_DATA["movie_list"]
+        
     movie_names = [m['movie_title'] for m in m_list]
     current_idx = next((i for i, m in enumerate(m_list) if m['movie_id'] == st.session_state.selected_movie_id), 0)
+    
+    # 1. 화면에서 사용자가 선택한 제목
     selected_title = st.selectbox("분석 대상 영화", movie_names, index=current_idx)
     target_date = st.date_input("기준 날짜", value=datetime.now())
+
+    # 🔥 [핵심 추가] 선택된 제목과 일치하는 진짜 영화 객체 찾기
+    selected_movie = next((m for m in m_list if m["movie_title"] == selected_title), None)
+
+    # 세션 상태도 최신 선택값으로 동기화 (안전장치)
+    if selected_movie:
+        st.session_state.selected_movie_id = selected_movie["movie_id"]
 
     should_run = st.session_state.auto_start
     if st.button("🚀 분석 시작") or should_run:
         st.session_state.auto_start = False 
-        payload = {"movie_id": st.session_state.selected_movie_id, "target_date": str(target_date)}
         
+        # 2. 방어 코드: 선택된 영화가 없으면 중단
+        if not selected_movie:
+            st.error("❌ 선택한 영화 정보를 찾을 수 없습니다. 영화 목록을 다시 확인해 주세요.")
+            st.stop()
+
+        # 3. 진짜 payload 생성 (현재 선택된 selected_movie 정보 활용)
+        payload = {
+            "movie_id": str(selected_movie["movie_id"]), # ID가 숫자일 경우 대비해 str 변환
+            "target_date": target_date.isoformat()       # 백엔드가 좋아하는 날짜 형식으로!
+        }
+        
+        # 🐛 [디버그용] 서버로 보내기 직전 데이터 확인 (나중에 지우셔도 됩니다)
+        # st.write("DEBUG payload:", payload)
+
         with st.status("배치 작업 진행 중...", expanded=True) as status:
             try:
-                # 1단계: Job 생성
+                # 1단계: Job 생성 (이제 422 에러 안녕!)
                 st.write("📡 1/4: 분석 작업 생성 중...")
                 post_res = requests.post(f"{BASE_URL}/batch/jobs", json=payload, timeout=30)
+                
+                # 만약 또 422가 나면 이유를 화면에 출력
+                if post_res.status_code == 422:
+                    st.error(f"데이터 검증 실패(422): {post_res.text}")
+                    st.stop()
+                    
                 post_res.raise_for_status()
                 st.session_state.job_id = post_res.json()['job_id']
                 
-                # 2단계: LLM 실행 (넉넉하게 대기)
+                # ... (이하 2, 3, 4단계 코드는 동일)
                 st.write("🧠 2/4: AI 모델 분석 중... ")
                 requests.post(f"{BASE_URL}/batch/jobs/{st.session_state.job_id}/run-llm", timeout=300)
                 
-                # 3단계: 클러스터링 실행 (hdbscan 모드 파라미터 추가)
                 st.write("✨ 3/4: 비슷한 의견 그룹화 중...")
                 requests.post(f"{BASE_URL}/batch/jobs/{st.session_state.job_id}/run-cluster", json={"cluster_mode": "hdbscan"}, timeout=300)
                 
-                # 4단계: 최종 결과 빌드
                 st.write("📦 4/4: 최종 요약 리포트 생성 중...")
                 requests.post(f"{BASE_URL}/batch/jobs/{st.session_state.job_id}/build-final", timeout=60)
                 
@@ -247,9 +275,8 @@ elif menu == "2. 분석 요청(배치)":
                 st.session_state.analysis_done = True
                 
             except Exception as e:
-                st.error(f"🚨 서버 에러 또는 타임아웃 발생: {e}")
+                st.error(f"🚨 에러 발생: {e}")
                 status.update(label="에러 발생", state="error")
-                st.session_state.job_id = None # 가짜 ID 생성 방지
 
     if st.session_state.get("analysis_done"):
         st.success("🎉 분석이 완벽하게 완료되었습니다!")
