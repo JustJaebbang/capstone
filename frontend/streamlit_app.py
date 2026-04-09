@@ -377,11 +377,12 @@ elif menu == "3. 분석 결과 보기":
             rev_res.raise_for_status()
             reviews_data = rev_res.json()
             
-            # API 데이터 추출
-            items = reviews_data.get("items", []) if isinstance(reviews_data, dict) else []
+          # 임시 디버그 - API 응답 구조 확인용
+            
+
+            items = reviews_data.get("reviews", []) if isinstance(reviews_data, dict) else []
             total_count = reviews_data.get("total_count", 0)
             total_pages = reviews_data.get("total_pages", 1)
-            
             # 🎯 UI 1: 상단 정보 표시 (기획서 8번 스타일)
             st.markdown(f"#### 🔎 {clean_label} - 리뷰 목록")
             st.markdown(f"<div style='background-color:#f8f9fa; padding:10px; border-radius:10px; color:#555; font-weight:500;'>📊 total_count: {total_count} 건</div>", unsafe_allow_html=True)
@@ -398,7 +399,7 @@ elif menu == "3. 분석 결과 보기":
                 with st.container(border=True):
                     review_num = (page - 1) * size + i + 1 
                     st.markdown(f"<div style='font-size:13px; color:#1f77b4; font-weight:bold;'>리뷰 {review_num}</div>", unsafe_allow_html=True)
-                    st.markdown(f"**{emo} {item.get('content', '내용이 없습니다.')}**")
+                    st.markdown(f"**{emo} {item.get('text', '내용이 없습니다.')}**")
                     
             # 🎯 UI 2: 하단 페이징 (이전 - 페이지 번호 중앙 - 다음)
             st.write("") 
