@@ -46,7 +46,7 @@ def read_job_status(job_id: str):
 @router.post("/{job_id}/run-llm")
 def run_batch_job(
     job_id: str,
-    review_limit: int = 50,
+    review_limit: int = 1000,
     source_mode: str = "dataset", 
     llm_mode: str = "rule_based", 
     ):
