@@ -174,9 +174,10 @@ if 'reviews_page' not in st.session_state:
 if 'reviews_data' not in st.session_state:
     st.session_state.reviews_data = {"items": [], "total_pages": 1, "total_count": 0}
 
-# 🔥 [새로 추가] 리뷰 게시판이 나타날 위치를 기억하는 변수!
 if 'active_review_section' not in st.session_state:
-    st.session_state.active_review_section = "top3" # 기본값은 TOP 3 밑!
+    st.session_state.active_review_section = None
+if 'show_other_groups' not in st.session_state:
+    st.session_state.show_other_groups = False
 
 MOVIE_EMOJI = ["🎬", "🍿", "🎥", "🎞️", "📽️", "🎭", "🌟", "🚀"]
 MENU_OPTIONS = ["1. 영화 목록", "2. 분석 요청(배치)", "3. 분석 결과 보기"]
@@ -191,7 +192,8 @@ if st.sidebar.button("🏠 Home", use_container_width=True, key="home_btn"):
     st.session_state.selected_cluster_id = None
     st.session_state.job_id = None 
     st.session_state.final_result = None 
-    st.session_state.active_review_section = "top3"
+    st.session_state.active_review_section = None
+    st.session_state.show_other_groups = False
     st.rerun()
 
 st.sidebar.title("🎬 영화 분석 시스템")
@@ -316,7 +318,8 @@ elif menu == "2. 분석 요청(배치)":
             st.session_state.analysis_done = False
             st.session_state.final_result = None 
             st.session_state.opinion_groups = []
-            st.session_state.active_review_section = "top3"
+            st.session_state.active_review_section = None
+            st.session_state.show_other_groups = False
             st.session_state.current_menu = "3. 분석 결과 보기"
             st.rerun()
 
@@ -332,7 +335,7 @@ elif menu == "3. 분석 결과 보기":
     if st.session_state.final_result is None:
         with st.spinner("분석 요약 결과를 불러오는 중..."):
             try:
-                res = requests.get(f"{BASE_URL}/batch/jobs/{st.session_state.job_id}/final-result", timeout=5)
+                res = requests.get(f"{BASE_URL}/batch/jobs/{st.session_state.job_id}/final-result", timeout=30)
                 res.raise_for_status()
                 st.session_state.final_result = res.json()
             except Exception as e:
@@ -435,7 +438,7 @@ elif menu == "3. 분석 결과 보기":
     st.write("") 
 
     # --- 3. 상단 요약 UI (TOP 3) ---
-    st.subheader("🏆 많이 나온 의견 TOP 3 (클릭하면 바로 아래에 리뷰가 열려요!)")
+    st.subheader("🏆 많이 나온 의견 TOP 3 ")
     
     col1, col2, col3 = st.columns(3)
     top_ops = summary_data.get("top_opinions", [])
@@ -463,44 +466,42 @@ elif menu == "3. 분석 결과 보기":
     st.write("") 
     st.markdown("<hr style='margin: 10px 0px 20px 0px; border-top: 2px solid #1f77b4;'>", unsafe_allow_html=True)
 
-    # 🌟 아무것도 안 눌렀을 땐 기본으로 1위(top3)를 띄워줌
-    if st.session_state.selected_cluster_id is None and groups:
-        st.session_state.selected_cluster_id = groups[0]['cluster_id']
-        st.session_state.active_review_section = "top3"
-
-    # 🚀 TOP 3를 눌렀을 때만 여기서 리뷰 게시판 함수 호출!
-    if st.session_state.active_review_section == "top3":
+    # 🚀 TOP3 버튼 눌렀을 때만 리뷰 표시 (기본값 없음)
+    if st.session_state.active_review_section == "top3" and st.session_state.selected_cluster_id:
         display_review_board("top")
 
-    # --- 4. 그 외 의견 박스 영역 ---
+    # --- 4. 그 외 의견 버튼 ---
     st.divider()
-    st.subheader("💡 그 외의 다양한 의견들도 확인해 보세요!")
+    if st.button("💡 그 외의 다양한 의견들도 확인해보세요!", use_container_width=True):
+        st.session_state.show_other_groups = not st.session_state.get("show_other_groups", False)
+        st.session_state.active_review_section = "other"
+        st.session_state.selected_cluster_id = None
+        st.session_state.reviews_page = 1
+        st.rerun()
 
     other_groups = [g for g in groups if g['label'] not in top3_labels]
 
-    if other_groups:
-        other_opts = {g['cluster_id']: f"✨ {g['label']} ({g.get('count', 0)}건)" for g in other_groups}
-        
-        st.radio(
-            "궁금한 추가 의견을 선택해서 리뷰를 확인해 보세요!",
-            options=list(other_opts.keys()),
-            format_func=lambda x: other_opts[x],
-            horizontal=True,
-            key="other_radio",
-            index=None 
-        )
-        
-        # '그 외 의견' 라디오 버튼을 클릭하면!
-        if st.session_state.other_radio is not None and st.session_state.other_radio != st.session_state.selected_cluster_id:
-            st.session_state.selected_cluster_id = st.session_state.other_radio
-            st.session_state.active_review_section = "other" # 🌟 하단 섹션 활성화!
-            st.session_state.reviews_page = 1
-            st.rerun()
+    if st.session_state.get("show_other_groups", False):
+        if other_groups:
+            other_opts = {g['cluster_id']: f"✨ {g['label']} ({g.get('count', 0)}건)" for g in other_groups}
 
-        # 🚀 '그 외 의견'을 눌렀을 때만 여기서 리뷰 게시판 함수 호출!
-        if st.session_state.active_review_section == "other":
-            st.markdown("<hr style='margin: 10px 0px 20px 0px; border-top: 2px solid #2e7d32;'>", unsafe_allow_html=True)
-            display_review_board("bottom")
-            
-    else:
-        st.info("TOP 3 외에 추가 의견 그룹이 없습니다.")
+            selected_other = st.radio(
+                "궁금한 추가 의견을 선택해서 리뷰를 확인해 보세요!",
+                options=list(other_opts.keys()),
+                format_func=lambda x: other_opts[x],
+                horizontal=True,
+                key="other_radio",
+                index=None
+            )
+
+            if selected_other is not None and selected_other != st.session_state.selected_cluster_id:
+                st.session_state.selected_cluster_id = selected_other
+                st.session_state.active_review_section = "other"
+                st.session_state.reviews_page = 1
+                st.rerun()
+
+            if st.session_state.active_review_section == "other" and st.session_state.selected_cluster_id:
+                st.markdown("<hr style='margin: 10px 0px 20px 0px; border-top: 2px solid #2e7d32;'>", unsafe_allow_html=True)
+                display_review_board("bottom")
+        else:
+            st.info("TOP 3 외에 추가 의견 그룹이 없습니다.")
