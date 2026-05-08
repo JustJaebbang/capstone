@@ -1,4 +1,6 @@
-import Link from "next/link";
+"use client";
+
+import { useRouter } from "next/navigation";
 import type { DashboardMovie } from "@/lib/types";
 import SentimentDonut from "./SentimentDonut";
 import KeywordRow from "./KeywordRow";
@@ -18,7 +20,12 @@ function formatDateTime(iso: string | null): string {
 }
 
 export default function MovieCard({ movie }: Props) {
+  const router = useRouter();
   const isCompleted = movie.job_status === "completed";
+
+  const handleSelect = () => {
+    router.push(`/movies/${movie.movie_id}/analyzing`);
+  };
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -26,7 +33,6 @@ export default function MovieCard({ movie }: Props) {
         {/* 좌측: 포스터 */}
         <div className="flex h-44 w-32 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-xs text-gray-400">
           {movie.poster_url ? (
-            // poster_url이 채워지면 여기서 <img> 또는 <Image> 사용
             <span>이미지</span>
           ) : (
             <span className="px-2 text-center">{movie.movie_title}</span>
@@ -66,10 +72,10 @@ export default function MovieCard({ movie }: Props) {
             {isCompleted && (
               <div className="flex items-center gap-2 text-xs">
                 <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 font-semibold text-green-700">
-                  ✓ 분석 완료
+                  ✓ 최근 분석
                 </span>
                 <span className="text-gray-400">
-                  분석 완료 시각: {formatDateTime(movie.job_completed_at)}
+                  {formatDateTime(movie.job_completed_at)}
                 </span>
               </div>
             )}
@@ -120,23 +126,14 @@ export default function MovieCard({ movie }: Props) {
               </div>
             </div>
 
-            {/* 버튼 */}
-            <div className="flex flex-col gap-2">
-              <Link
-                href={`/movies/${movie.movie_id}`}
-                className="rounded-xl bg-blue-600 px-5 py-2.5 text-center text-sm font-semibold text-white hover:bg-blue-700"
-              >
-                선택
-              </Link>
-              {movie.latest_job_id && (
-                <Link
-                  href={`/jobs/${movie.latest_job_id}/result`}
-                  className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-center text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  🔍 미리보기
-                </Link>
-              )}
-            </div>
+            {/* 버튼 — 분석 시작 */}
+            <button
+              type="button"
+              onClick={handleSelect}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-center text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              분석 시작
+            </button>
           </div>
 
           {/* 하단 메타 */}
