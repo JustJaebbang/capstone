@@ -1,79 +1,57 @@
 import Link from "next/link";
-import { getMovies } from "@/lib/api";
 
-export default async function MoviesPage() {
-  const movies = await getMovies();
-
+export default function HomePage() {
   return (
-    <main className="min-h-screen bg-gray-50 px-6 py-10">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-blue-600">
-              Movie Review Analysis
-            </p>
+    <main className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+      <div className="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-6 py-16">
+        {/* 로고/배지 */}
+        <p className="text-sm font-semibold tracking-wide text-blue-600">
+          Movie Review Analysis
+        </p>
 
-            <h1 className="mt-2 text-3xl font-bold text-gray-900">
-              분석 대상 영화 목록
-            </h1>
+        {/* 메인 타이틀 */}
+        <h1 className="mt-4 text-center text-5xl font-bold text-gray-900">
+          영화 리뷰, <br />
+          <span className="text-blue-600">한눈에 분석하다</span>
+        </h1>
 
-            <p className="mt-2 text-gray-600">
-              백엔드 API에서 불러온 영화 목록입니다.
-            </p>
-          </div>
+        {/* 서브 타이틀 */}
+        <p className="mt-6 max-w-xl text-center text-lg text-gray-600">
+          AI 기반 감성 분석과 클러스터링으로 관객의 진짜 의견을 파악합니다.
+          <br />
+          리뷰 수집부터 인사이트 요약까지, 한 번에.
+        </p>
 
+        {/* CTA 버튼 */}
+        <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
           <Link
-            href="/"
-            className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+            href="/movies"
+            className="rounded-xl bg-blue-600 px-8 py-4 text-lg font-semibold text-white shadow-md transition hover:bg-blue-700 hover:shadow-lg"
           >
-            홈으로
+            영화 목록 보러가기 →
           </Link>
         </div>
 
-        <div className="grid gap-4">
-          {movies.map((movie) => (
+        {/* 4단계 안내 */}
+        <div className="mt-20 grid w-full grid-cols-2 gap-4 sm:grid-cols-4">
+          {[
+            { icon: "📥", title: "리뷰 수집", desc: "리뷰 데이터를 수집합니다" },
+            { icon: "😊", title: "감성 분석", desc: "긍/부정 감성 분석" },
+            { icon: "👥", title: "클러스터링", desc: "토픽을 그룹화합니다" },
+            { icon: "📄", title: "인사이트 요약", desc: "핵심 인사이트 제공" },
+          ].map((step, i) => (
             <div
-              key={movie.movie_id}
-              className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+              key={step.title}
+              className="rounded-2xl border border-gray-200 bg-white p-5 text-center shadow-sm"
             >
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">
-                    {movie.movie_title}
-                  </h2>
-
-                  <div className="mt-2 flex gap-2 text-sm">
-                    <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-600">
-                      {movie.release_year}
-                    </span>
-
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">
-                      {movie.source}
-                    </span>
-
-                    {movie.is_active && (
-                      <span className="rounded-full bg-green-50 px-3 py-1 text-green-700">
-                        활성
-                      </span>
-                    )}
-                  </div>
-
-                  {movie.notes && (
-                    <p className="mt-3 text-sm text-gray-500">{movie.notes}</p>
-                  )}
-
-                  <p className="mt-2 text-xs text-gray-400">
-                    ID: {movie.movie_id}
-                  </p>
-                </div>
-
-                <Link
-                  href={`/movies/${movie.movie_id}`}
-                  className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
-                >
-                  선택
-                </Link>
-              </div>
+              <div className="text-3xl">{step.icon}</div>
+              <p className="mt-2 text-xs font-semibold text-blue-600">
+                STEP {i + 1}
+              </p>
+              <p className="mt-1 text-sm font-bold text-gray-900">
+                {step.title}
+              </p>
+              <p className="mt-1 text-xs text-gray-500">{step.desc}</p>
             </div>
           ))}
         </div>
