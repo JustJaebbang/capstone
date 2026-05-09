@@ -7,8 +7,6 @@ import {
 
 import StatCardGrid from "@/components/dashboard/StatCardGrid";
 import MovieCardGrid from "@/components/dashboard/MovieCardGrid";
-import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
-import ServiceFlowBanner from "@/components/dashboard/ServiceFlowBanner";
 
 export default async function MoviesPage() {
   // 두 API 병렬 호출 (mock이라도 패턴은 동일)
@@ -42,17 +40,10 @@ export default async function MoviesPage() {
           </Link>
         </div>
 
-        {/* 본문 — 좌측 컨텐츠 + 우측 사이드바 */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-          {/* 좌측 컬럼 */}
-          <div className="flex flex-col gap-6">
-            <StatCardGrid summary={summary} />
-            <MovieCardGrid movies={moviesResponse.items} />
-            <ServiceFlowBanner />
-          </div>
-
-          {/* 우측 사이드바 */}
-          <DashboardSidebar summary={summary} />
+        {/* 본문 */}
+        <div className="flex flex-col gap-6">
+          <StatCardGrid summary={summary} />
+          <MovieCardGrid movies={moviesResponse.items} />
         </div>
       </div>
     </main>

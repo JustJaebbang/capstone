@@ -48,10 +48,18 @@ export default function MovieCard({ movie }: Props) {
                 {movie.movie_title}
               </h2>
 
-              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+             <div className="mt-2 flex flex-wrap gap-2 text-xs">
                 <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600">
                   {movie.release_year}
                 </span>
+                {movie.genres.map((genre) => (
+                  <span
+                    key={genre}
+                    className="rounded-full bg-purple-50 px-2.5 py-1 text-purple-700"
+                  >
+                    {genre}
+                  </span>
+                ))}
                 <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
                   {movie.source}
                 </span>
@@ -139,8 +147,6 @@ export default function MovieCard({ movie }: Props) {
           {/* 하단 메타 */}
           <div className="mt-4 flex items-center gap-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
             <span>⭐ 개봉일: {movie.release_date ?? "-"}</span>
-            <span>장르: {movie.genres.join(", ")}</span>
-            <span>수집 출처: {movie.source} 영화</span>
           </div>
         </div>
       </div>
