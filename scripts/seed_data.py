@@ -55,12 +55,14 @@ def seed_reviews_from_reviews_json(db):
         reviews = json.load(f)
 
     count = 0
+    new_movies: dict[str, Movie] = {}
 
     for item in reviews:
         movie_id = item["movie_id"]
 
-        # reviews.json에 movie 정보가 있으므로 movie가 없으면 자동 생성
-        movie = db.get(Movie, movie_id)
+        # db.get() does not see pending (unflushed) objects, so also dedup
+        # against movies we just added in this loop.
+        movie = db.get(Movie, movie_id) or new_movies.get(movie_id)
         if movie is None:
             movie = Movie(
                 movie_id=movie_id,
@@ -69,6 +71,7 @@ def seed_reviews_from_reviews_json(db):
                 source=item.get("source"),
             )
             db.add(movie)
+            new_movies[movie_id] = movie
 
         review = db.get(Review, item["review_id"])
 
@@ -96,6 +99,8 @@ def main():
 
     try:
         movie_count = seed_movies_from_movies_json(db)
+        # Flush so movies become visible to db.get() in the reviews seeding step.
+        db.flush()
         review_count = seed_reviews_from_reviews_json(db)
 
         db.commit()
