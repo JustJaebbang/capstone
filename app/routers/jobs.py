@@ -25,12 +25,12 @@ router = APIRouter(prefix="/batch/jobs", tags=["jobs"])
 @router.post("", response_model=CreateBatchJobResponse)
 def create_batch_job(payload: CreateBatchJobRequest):
     movies = get_movies()
-    target_movie = next((m for m in movies if m.movie_id == payload.movie_id), None)
+    target_movie = next((m for m in movies if m["movie_id"] == payload.movie_id), None)
 
     if target_movie is None:
         raise HTTPException(status_code=404, detail="Movie not found")
 
-    job = create_job(payload, movie_title=target_movie.movie_title)
+    job = create_job(payload, movie_title=target_movie["movie_title"])
     return CreateBatchJobResponse(job_id=job.job_id, status=job.status)
 
 
@@ -46,7 +46,7 @@ def read_job_status(job_id: str):
 @router.post("/{job_id}/run-llm")
 def run_batch_job(
     job_id: str,
-    review_limit: int = 50,
+    review_limit: int = 1000,
     source_mode: str = "dataset", 
     llm_mode: str = "rule_based", 
     ):

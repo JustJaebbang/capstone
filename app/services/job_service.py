@@ -1,95 +1,141 @@
-import json
 from datetime import datetime
-from pathlib import Path
 from typing import List, Optional
 
+from app.db.models.batch_job import BatchJob
+from app.db.session import SessionLocal
 from app.schemas import (
-    BatchJobSchema, 
-    CreateBatchJobRequest, 
-    LLMRequestSchema, 
+    BatchJobSchema,
+    CreateBatchJobRequest,
+    LLMRequestSchema,
+    OpinionReviewItem,
     ReviewItem,
-    OpinionGroupReviewsResponse,
+    OpinionGroupListItem,
     OpinionGroupListResponse,
+    OpinionGroupReviewsResponse,
 )
 from app.services.llm_service import extract_phrases_with_sentiment
 from app.services.cluster_service import build_cluster_request_for_job, run_cluster_module
 from app.services.review_service import fetch_reviews
 from app.services.result_service import (
-    save_llm_result, 
-    save_cluster_result,
-    save_final_result,
+    save_llm_phrases_to_db,
+    save_opinion_groups_to_db,
+    save_review_cluster_map_to_db,
+    save_movie_summary_to_db,
     get_llm_result_by_job_id,
     get_cluster_result_by_job_id,
+    get_opinion_group_list_from_db,
+    get_opinion_group_meta_from_db,
+    get_paginated_reviews_for_cluster_from_db,
 )
 
 from app.services.final_service import (
-    build_final_result, 
-    get_reviews_for_cluster,
-    build_opinion_group_list,
+    build_final_result,
+    collect_reviews_for_cluster,
 )
 
-DATA_PATH = Path("data/jobs.json")
 
-
-def read_jobs() -> List[dict]:
-    with DATA_PATH.open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def write_jobs(jobs: List[dict]) -> None:
-    with DATA_PATH.open("w", encoding="utf-8") as f:
-        json.dump(jobs, f, ensure_ascii=False, indent=2)
+def _batchjob_to_schema(row: BatchJob) -> BatchJobSchema:
+    return BatchJobSchema(
+        job_id=row.job_id,
+        movie_id=row.movie_id,
+        movie_title=row.movie_title,
+        target_date=row.target_date,
+        status=row.status,
+        created_at=row.created_at,
+        started_at=row.started_at,
+        finished_at=row.finished_at,
+    )
 
 
 def list_jobs() -> List[BatchJobSchema]:
-    return [BatchJobSchema(**job) for job in read_jobs()]
+    db = SessionLocal()
+    try:
+        rows = db.query(BatchJob).order_by(BatchJob.job_id).all()
+        return [_batchjob_to_schema(r) for r in rows]
+    finally:
+        db.close()
 
 
 def get_job(job_id: str) -> Optional[BatchJobSchema]:
-    for job in list_jobs():
-        if job.job_id == job_id:
-            return job
-    return None
+    db = SessionLocal()
+    try:
+        row = db.query(BatchJob).filter(BatchJob.job_id == job_id).one_or_none()
+        if row is None:
+            return None
+        return _batchjob_to_schema(row)
+    finally:
+        db.close()
+
+
+def _next_job_id(db) -> str:
+    existing = [row[0] for row in db.query(BatchJob.job_id).all()]
+    max_n = 0
+    for jid in existing:
+        try:
+            n = int(jid.split("_", 1)[1])
+        except (IndexError, ValueError):
+            continue
+        if n > max_n:
+            max_n = n
+    return f"job_{max_n+1:03d}"
 
 
 def create_job(payload: CreateBatchJobRequest, movie_title: str) -> BatchJobSchema:
-    jobs = read_jobs()
-    new_job = BatchJobSchema(
-        job_id=f"job_{len(jobs)+1:03d}",
-        movie_id=payload.movie_id,
-        movie_title=movie_title,
-        target_date=payload.target_date,
-        status="queued",
-        created_at=datetime.now(),
-        started_at=None,
-        finished_at=None,
-    )
-    jobs.append(new_job.model_dump(mode="json"))
-    write_jobs(jobs)
+    db = SessionLocal()
+    try:
+        new_job = BatchJobSchema(
+            job_id=_next_job_id(db),
+            movie_id=payload.movie_id,
+            movie_title=movie_title,
+            target_date=payload.target_date,
+            status="queued",
+            created_at=datetime.now(),
+            started_at=None,
+            finished_at=None,
+        )
+        db.add(
+            BatchJob(
+                job_id=new_job.job_id,
+                movie_id=new_job.movie_id,
+                movie_title=new_job.movie_title,
+                target_date=new_job.target_date,
+                status=new_job.status,
+                created_at=new_job.created_at,
+                started_at=new_job.started_at,
+                finished_at=new_job.finished_at,
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
     return new_job
 
 
 def update_job_status(job_id: str, new_status: str) -> None:
-    jobs = read_jobs()
-    updated = False
+    db = SessionLocal()
+    try:
+        db_job = db.query(BatchJob).filter(BatchJob.job_id == job_id).one_or_none()
+        if db_job is None:
+            raise ValueError(f"Job not found: {job_id}")
 
-    for job in jobs:
-        if job["job_id"] == job_id:
-            job["status"] = new_status
+        db_job.status = new_status
 
-            if new_status != "queued" and job["started_at"] is None:
-                job["started_at"] = datetime.now().isoformat()
+        if new_status != "queued" and db_job.started_at is None:
+            db_job.started_at = datetime.now()
 
-            if new_status in ["completed", "failed"]:
-                job["finished_at"] = datetime.now().isoformat()
+        if new_status in ("completed", "failed"):
+            db_job.finished_at = datetime.now()
 
-            updated = True
-            break
-
-    if not updated:
-        raise ValueError(f"Job not found: {job_id}")
-
-    write_jobs(jobs)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def build_llm_request(
@@ -158,13 +204,13 @@ def run_llm_for_job(
             f"LLM result count mismatch: input={input_count}, output={output_count}"
         )
     
-    save_llm_result(
+    save_llm_phrases_to_db(
         job_id=job.job_id,
         movie_id=job.movie_id,
         result_data=llm_result,
     )
     print(f"[Pipeline] llm results received: {output_count}")
-    print("[Pipeline] llm_results saved")
+    print("[Pipeline] llm_phrases saved (db)")
     
     return llm_result
 
@@ -178,10 +224,10 @@ def run_cluster_for_job(
     cluster_response = run_cluster_module(cluster_request, mode=cluster_mode)
     cluster_result = cluster_response.model_dump(mode="json")
 
-    save_cluster_result(
+    save_opinion_groups_to_db(
         job_id=job.job_id,
         movie_id=job.movie_id,
-        result_data=cluster_result,
+        cluster_result=cluster_result,
     )
 
     return cluster_result
@@ -216,13 +262,29 @@ def run_final_for_job(job) -> dict:
         cluster_result=cluster_result,
         source_reviews=source_reviews_data,
     )
-    
+
     final_result = final_response.model_dump(mode="json")
 
-    save_final_result(
-        job_id=job.job_id,
+    mapping_rows = []
+    for cluster in cluster_result["clusters"]:
+        matched = collect_reviews_for_cluster(
+            cluster=cluster,
+            llm_result=llm_result,
+            source_reviews=source_reviews_data,
+        )
+        for review in matched:
+            mapping_rows.append(
+                {
+                    "job_id": job.job_id,
+                    "cluster_id": cluster["cluster_id"],
+                    "review_id": review.review_id,
+                }
+            )
+
+    save_review_cluster_map_to_db(job_id=job.job_id, mapping=mapping_rows)
+    save_movie_summary_to_db(
         movie_id=job.movie_id,
-        result_data=final_result,
+        sentiment_ratio=final_result["summary"]["sentiment_ratio"],
     )
 
     return final_result
@@ -234,72 +296,46 @@ def get_opinion_group_reviews(
     page: int = 1,
     page_size: int = 20,
 ) -> dict:
-    
-    llm_result = get_llm_result_by_job_id(job.job_id)
-    if llm_result is None:
-        raise ValueError(f"LLM result not found for job_id={job.job_id}")
-
-    cluster_result = get_cluster_result_by_job_id(job.job_id)
-    if cluster_result is None:
-        raise ValueError(f"Cluster result not found for job_id={job.job_id}")
-
-    source_reviews = fetch_reviews(
-        movie_id=job.movie_id,
-        review_limit=1000,
-        source_mode="dataset",
-    )
-
-    source_reviews_data = [
-        {
-            "review_id": review.review_id,
-            "text": review.text,
-        }
-        for review in source_reviews
-    ]
-
-    label, reviews = get_reviews_for_cluster(
-        job=job,
-        cluster_id=cluster_id,
-        llm_result=llm_result,
-        cluster_result=cluster_result,
-        source_reviews=source_reviews_data,
-    )
-
     if page < 1:
         raise ValueError("page must be >= 1")
 
     if page_size < 1:
         raise ValueError("page_size must be >= 1")
 
-    total_count = len(reviews)
-    total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+    meta = get_opinion_group_meta_from_db(job.job_id, cluster_id)
+    if meta is None:
+        raise ValueError(f"Cluster not found: {cluster_id}")
 
-    start = (page - 1) * page_size
-    end = start + page_size
-    paged_reviews = reviews[start:end]
-
-    response = OpinionGroupReviewsResponse(
+    paged_rows, total_count = get_paginated_reviews_for_cluster_from_db(
         job_id=job.job_id,
         cluster_id=cluster_id,
-        label=label,
+        page=page,
+        page_size=page_size,
+    )
+
+    total_pages = (
+        (total_count + page_size - 1) // page_size if total_count > 0 else 1
+    )
+
+    return OpinionGroupReviewsResponse(
+        job_id=job.job_id,
+        cluster_id=cluster_id,
+        label=meta["label"],
         total_count=total_count,
         page=page,
         page_size=page_size,
         total_pages=total_pages,
-        reviews=paged_reviews,
-    )
-
-    return response.model_dump(mode="json")
+        reviews=[OpinionReviewItem(**row) for row in (paged_rows or [])],
+    ).model_dump(mode="json")
 
 
 def get_opinion_groups(job) -> dict:
-    cluster_result = get_cluster_result_by_job_id(job.job_id)
-    if cluster_result is None:
-        raise ValueError(f"Cluster result not found for job_id={job.job_id}")
+    db_items = get_opinion_group_list_from_db(job.job_id)
+    if db_items is None:
+        raise ValueError(f"Opinion groups not found for job_id={job.job_id}")
 
-    response = build_opinion_group_list(
-        job=job,
-        cluster_result=cluster_result,
-    )
-
-    return response.model_dump(mode="json")
+    return OpinionGroupListResponse(
+        job_id=job.job_id,
+        items=[OpinionGroupListItem(**item) for item in db_items],
+        total_count=len(db_items),
+    ).model_dump(mode="json")
