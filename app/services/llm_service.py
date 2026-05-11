@@ -183,36 +183,79 @@ def extract_phrases_openai(payload: LLMRequestSchema) -> LLMResponseSchema:
         print("[LLM] OPENAI_API_KEY not found. Fallback to rule_based mode.")
         return extract_phrases_rule_based(payload)
 
+    reviews_json = json.dumps(
+        [{"review_id": r.review_id, "text": r.text} for r in payload.reviews],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
     system_instruction = """
-당신은 영화 리뷰 분석가입니다.
-각 리뷰에서 핵심 표현을 1~5개 추출하세요.
-각 표현은 짧고 명확한 한국어 구문이어야 합니다.
-각 표현마다 sentiment를 반드시 positive 또는 negative 중 하나로 부여하세요.
-반드시 review_id를 유지해야 하며, JSON 형식으로만 응답하세요.
+당신은 한국어 영화 리뷰를 클러스터링하기 좋은 핵심 평가 phrase로 정리하는 분석기입니다.
+
+목표:
+- 각 리뷰에서 관객이 평가한 영화 요소를 짧고 대표성 있는 phrase로 추출합니다.
+- phrase는 이후 토픽 클러스터링에 바로 사용되므로, 너무 추상적이거나 긴 문장형 표현을 피합니다.
+- 각 phrase에는 반드시 sentiment를 positive 또는 negative 중 하나로 붙입니다.
+- 출력은 반드시 JSON 객체만 반환합니다. 설명, 마크다운, 코드블록은 절대 쓰지 않습니다.
+
+phrase 작성 규칙:
+- 리뷰 1개당 1~3개만 추출합니다.
+- phrase는 보통 2~5어절, 20자 안팎의 짧은 한국어 구문으로 씁니다.
+- 기본 형식은 "평가 대상 + 평가"입니다.
+  예: "배우 연기 좋음", "후반 전개 아쉬움", "사운드 압도적", "영상미 뛰어남", "장르 전환 어색함", "몰입감 좋음"
+- 하나의 phrase에는 평가 대상 토픽을 반드시 하나만 담습니다.
+- 여러 요소가 한 문장에 섞이면 한 phrase에 몰아넣지 말고, 핵심 요소별로 분리합니다.
+  예: "음악 연출 연기 스토리 영상미 좋음" -> "사운드 좋음", "연출 좋음", "영상미 좋음" 중 중요한 것만 최대 3개
+  예: "스케일 스토리 영상미 OST 좋음" -> "스케일 압도적", "서사 좋음", "영상미 좋음", "사운드 좋음" 중 중요한 것만 최대 3개
+  예: "영상미와 사운드 경이" -> "영상미 뛰어남", "사운드 압도적"
+  예: "음악 연출력 미침" -> "사운드 좋음", "연출 좋음"
+- "영상미 사운드", "음악 연출", "연기 스토리", "스케일 영상미"처럼 두 개 이상의 토픽을 한 phrase에 함께 쓰지 않습니다.
+- 복합 감상문은 아래 토픽 중 가장 직접적인 평가 대상으로 쪼갭니다.
+  토픽 예: 배우 연기, 인물 존재감, 전개, 서사, 연출, 영상미, 사운드, 액션, 몰입감, 공포감, 장르 전환, 개연성, 러닝타임, 극장 체험
+- 리뷰 원문을 그대로 길게 복사하지 말고 클러스터링하기 쉬운 표준 표현으로 바꿉니다.
+  예: "반지의 제왕 급" -> "스케일 압도적" 또는 "서사 완성도 높음"
+  예: "끝나는게 아쉬움" -> "몰입감 좋음" 또는 "러닝타임 아쉬움"
+- 너무 일반적인 표현은 피합니다: "좋음", "별로", "재밌음", "기타 의견", "명작", "아쉬움"
+- "기타", "기타 의견", "긍정 반응", "부정 반응"은 사용하지 않습니다.
+- 배우, 감독, 음악감독 같은 인물이 평가의 핵심 대상이면 이름을 phrase에 포함해도 됩니다.
+  예: "티모시 연기 좋음", "김고은 연기 압도적", "한스 짐머 사운드 압도적"
+- 인물명이 핵심이 아니면 범주로 일반화합니다.
+  예: "배우 연기 좋음", "감독 연출 좋음"
+- 같은 의미의 phrase를 한 리뷰 안에서 중복하지 않습니다.
+- review_id는 입력값과 정확히 동일하게 유지합니다.
 """
 
     prompt = f"""
-분석할 리뷰 데이터:
-{json.dumps([r.model_dump(mode="json") for r in payload.reviews], ensure_ascii=False, indent=2)}
+아래 영화 리뷰 배열을 분석하세요.
 
-출력 형식:
+입력:
+{reviews_json}
+
+반환 JSON 형식:
 {{
   "results": [
     {{
-      "review_id": "r002_001",
+      "review_id": "입력 review_id",
       "phrases": [
         {{
-          "text": "연기 좋음",
-          "sentiment": "positive"
-        }},
-        {{
-          "text": "스토리 아쉬움",
-          "sentiment": "negative"
+          "text": "짧은 평가 관점",
+          "sentiment": "positive 또는 negative"
         }}
       ]
     }}
   ]
 }}
+
+필수 조건:
+- results 길이는 입력 리뷰 수와 같아야 합니다.
+- 모든 입력 review_id가 정확히 한 번씩 포함되어야 합니다.
+- sentiment 값은 반드시 "positive" 또는 "negative"만 사용하세요.
+- phrase는 토픽 라벨로 쓸 수 있게 구체적인 평가 대상이 드러나야 합니다.
+- 한 phrase에 "음악/연출/연기/스토리/영상미"처럼 여러 토픽을 나열하지 마세요.
+- 복합 phrase를 만들 바에는 phrase 개수를 늘려 분리하세요. 단, 리뷰당 최대 3개를 넘기지 마세요.
+- 금지 예: "영상미 사운드 뛰어남", "음악 연출력 좋음", "스케일과 영상미 좋음", "연기 스토리 좋음"
+- 권장 예: "영상미 뛰어남", "사운드 압도적", "연출 좋음", "스케일 압도적", "배우 연기 좋음"
+- JSON 외의 텍스트는 출력하지 마세요.
 """
 
     try:
@@ -264,7 +307,7 @@ def extract_phrases_openai(payload: LLMRequestSchema) -> LLMResponseSchema:
 
 def extract_phrases_with_sentiment(
     payload: LLMRequestSchema,
-    mode: str = "rule_based",
+    mode: str = "openai",
 ) -> LLMResponseSchema:
     if mode == "dummy":
         print("[LLM] mode=dummy")
