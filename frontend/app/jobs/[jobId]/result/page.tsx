@@ -1,6 +1,5 @@
 import Link from "next/link";
 import SentimentRatio from "@/components/SentimentRatio";
-import TopOpinions from "@/components/TopOpinions";
 import ResultReviewSection from "@/components/ResultReviewSection";
 import { getFinalResult, getOpinionGroups } from "@/lib/api";
 
@@ -10,20 +9,11 @@ type ResultPageProps = {
   }>;
 };
 
-type ApiTopOpinion = {
-  rank?: number;
-  topic?: string;
-  sentiment?: string;
-  label: string;
-  count: number;
-};
-
 type ApiFinalResult = {
   job_id?: string;
   movie_id?: string;
   movie_title?: string;
   summary: {
-    top_opinions: ApiTopOpinion[];
     sentiment_ratio: {
       positive_percent: number;
       negative_percent: number;
@@ -63,11 +53,13 @@ function normalizeOpinionGroups(
     ? response
     : response.items ?? response.groups ?? [];
 
-  return groups.map((group) => ({
-    cluster_id: String(group.cluster_id),
-    label: group.label,
-    count: group.count,
-  }));
+  return groups
+    .map((group) => ({
+      cluster_id: String(group.cluster_id),
+      label: group.label,
+      count: group.count,
+    }))
+    .sort((a, b) => b.count - a.count);
 }
 
 export default async function ResultPage({ params }: ResultPageProps) {
@@ -80,7 +72,6 @@ export default async function ResultPage({ params }: ResultPageProps) {
   const opinionGroups = normalizeOpinionGroups(opinionGroupsResponse);
   const sentimentRatio = finalResult.summary.sentiment_ratio;
 
-  // 핵심: ResultReviewSection에 undefined가 아니라 실제 job_id를 넘기기
   const effectiveJobId = finalResult.job_id ?? jobId;
 
   return (
@@ -122,8 +113,7 @@ export default async function ResultPage({ params }: ResultPageProps) {
               <h2 className="text-lg font-bold text-gray-900">요약</h2>
 
               <p className="mt-3 leading-7 text-gray-600">
-                백엔드 API에서 불러온 최종 분석 결과입니다. 의견 그룹을
-                선택하면 해당 그룹의 리뷰를 확인할 수 있습니다.
+                의견 그룹을 선택하면 해당 그룹의 리뷰를 확인할 수 있습니다.
               </p>
 
               <p className="mt-4 text-sm font-semibold text-gray-500">
@@ -131,8 +121,6 @@ export default async function ResultPage({ params }: ResultPageProps) {
               </p>
             </div>
           </div>
-
-          <TopOpinions opinions={finalResult.summary.top_opinions} />
 
           <ResultReviewSection jobId={effectiveJobId} groups={opinionGroups} />
         </section>

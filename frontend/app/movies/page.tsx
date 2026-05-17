@@ -1,19 +1,11 @@
 import Link from "next/link";
 
-import {
-  fetchDashboardMovies,
-  fetchDashboardSummary,
-} from "@/lib/dashboard";
+import { fetchDashboardMovies } from "@/lib/dashboard";
 
-import StatCardGrid from "@/components/dashboard/StatCardGrid";
 import MovieCardGrid from "@/components/dashboard/MovieCardGrid";
 
 export default async function MoviesPage() {
-  // 두 API 병렬 호출 (mock이라도 패턴은 동일)
-  const [summary, moviesResponse] = await Promise.all([
-    fetchDashboardSummary(),
-    fetchDashboardMovies(),
-  ]);
+  const moviesResponse = await fetchDashboardMovies();
 
   return (
     <main className="min-h-screen bg-gray-50 px-6 py-10">
@@ -42,7 +34,6 @@ export default async function MoviesPage() {
 
         {/* 본문 */}
         <div className="flex flex-col gap-6">
-          <StatCardGrid summary={summary} />
           <MovieCardGrid movies={moviesResponse.items} />
         </div>
       </div>
