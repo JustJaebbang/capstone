@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(uv run *)"
+      "PowerShell(uv run *)",
+      "Bash(uv run *)"
     ]
   }
 }
