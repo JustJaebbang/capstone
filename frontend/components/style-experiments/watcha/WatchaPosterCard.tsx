@@ -32,7 +32,7 @@ export default function WatchaPosterCard({ movie, rank }: Props) {
 
   return (
     <Link
-      href={`/movies/${movie.movie_id}/analyzing`}
+      href="/style-experiments/watcha/result"
       className="group block"
     >
       {/* Poster */}
@@ -40,39 +40,33 @@ export default function WatchaPosterCard({ movie, rank }: Props) {
         className="relative aspect-[2/3] w-full overflow-hidden rounded-[6px] shadow-[0_2px_10px_-3px_rgba(20,15,5,0.22)] transition-transform duration-500 ease-out group-hover:-translate-y-1 group-hover:shadow-[0_18px_36px_-12px_rgba(20,15,5,0.35)]"
         style={{ background: grad }}
       >
-        {/* faux poster typography */}
-        <div className="absolute inset-0 flex flex-col justify-between p-5">
-          <div className="flex items-start justify-between">
-            {rank !== undefined ? (
-              <span className="font-serif text-[44px] italic leading-none text-white/75 tabular-nums">
-                {String(rank).padStart(2, "0")}
-              </span>
-            ) : (
-              <span />
-            )}
-            <span className="rounded-full bg-white/10 px-2 py-0.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.18em] text-white/80 backdrop-blur">
-              {movie.source}
+        {/* Top stripe — rank + source pill, always visible (above the overlay) */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-5">
+          {rank !== undefined ? (
+            <span className="font-serif text-[44px] italic leading-none text-white/80 tabular-nums">
+              {String(rank).padStart(2, "0")}
             </span>
-          </div>
-
-          <div>
-            <p className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-white/55">
-              {movie.release_year}
-              {movie.genres[0] ? ` · ${movie.genres[0]}` : ""}
-            </p>
-            <h3 className="mt-2 font-serif text-[28px] font-medium leading-[1.04] tracking-tight text-white">
-              {movie.movie_title}
-            </h3>
-          </div>
+          ) : (
+            <span />
+          )}
+          <span className="rounded-full bg-white/10 px-2 py-0.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.18em] text-white/85 backdrop-blur">
+            {movie.source}
+          </span>
         </div>
 
-        {/* score chip — Watcha-style */}
-        <div className="absolute right-3 top-3 hidden md:block">
-          {/* intentionally empty — primary score rendered below in editorial slot */}
+        {/* Bottom title block — visible at rest, fades out on hover */}
+        <div className="absolute inset-x-0 bottom-0 z-10 p-5 transition-opacity duration-300 group-hover:opacity-0">
+          <p className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-white/55">
+            {movie.release_year}
+            {movie.genres[0] ? ` · ${movie.genres[0]}` : ""}
+          </p>
+          <h3 className="mt-2 font-serif text-[28px] font-medium leading-[1.04] tracking-tight text-white">
+            {movie.movie_title}
+          </h3>
         </div>
 
-        {/* Hover overlay — reveals keywords */}
-        <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-[#0a0507]/92 via-[#0a0507]/55 to-transparent p-5 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+        {/* Hover overlay — fades in on hover, covers the title block area */}
+        <div className="absolute inset-0 z-10 flex flex-col justify-end bg-gradient-to-t from-[#0a0507]/95 via-[#0a0507]/65 to-transparent p-5 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
           <p className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-white/55">
             관객 의견 · top 3
           </p>
@@ -82,14 +76,14 @@ export default function WatchaPosterCard({ movie, rank }: Props) {
                 key={k.rank}
                 className="flex items-center justify-between gap-3 border-b border-white/10 pb-2 last:border-b-0 last:pb-0"
               >
-                <span className="font-serif text-[18px] font-medium leading-none text-white">
+                <span className="truncate font-serif text-[18px] font-medium leading-none text-white">
                   <span className="mr-1.5 text-white/40 tabular-nums">
                     {k.rank}.
                   </span>
                   {k.label}
                 </span>
                 <span
-                  className={`font-mono text-[10px] tabular-nums ${
+                  className={`shrink-0 font-mono text-[10px] tabular-nums ${
                     k.sentiment === "positive"
                       ? "text-[#ff8aa9]"
                       : k.sentiment === "negative"
@@ -103,7 +97,7 @@ export default function WatchaPosterCard({ movie, rank }: Props) {
             ))}
           </ul>
           <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.22em] text-white/45">
-            분석 페이지로 이동 →
+            분석 결과 보기 →
           </p>
         </div>
       </div>

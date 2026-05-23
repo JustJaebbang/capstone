@@ -1,11 +1,9 @@
 import Link from "next/link";
 
-import dashboardMoviesJson from "@/lib/mock/dashboard-movies.json";
-import dashboardSummaryJson from "@/lib/mock/dashboard-summary.json";
-import type {
-  DashboardMoviesResponse,
-  DashboardSummary,
-} from "@/lib/types";
+import {
+  fetchDashboardMovies,
+  fetchDashboardSummary,
+} from "@/lib/dashboard";
 
 import WatchaNav from "@/components/style-experiments/watcha/WatchaNav";
 import WatchaHero from "@/components/style-experiments/watcha/WatchaHero";
@@ -14,12 +12,13 @@ import WatchaKeywordEditorial from "@/components/style-experiments/watcha/Watcha
 import WatchaActivityList from "@/components/style-experiments/watcha/WatchaActivityList";
 import WatchaFooter from "@/components/style-experiments/watcha/WatchaFooter";
 
-const summary = dashboardSummaryJson as unknown as DashboardSummary;
-const movies = (
-  dashboardMoviesJson as unknown as DashboardMoviesResponse
-).items;
+export default async function WatchaPediaPage() {
+  const [summary, moviesResponse] = await Promise.all([
+    fetchDashboardSummary(),
+    fetchDashboardMovies(),
+  ]);
+  const movies = moviesResponse.items;
 
-export default function WatchaPediaPage() {
   const sorted = [...movies].sort(
     (a, b) => b.sentiment.positive_percent - a.sentiment.positive_percent,
   );
@@ -52,7 +51,23 @@ export default function WatchaPediaPage() {
 
       <div className="watcha-page">
         <WatchaNav updatedAt={summary.updated_at} />
-        <WatchaHero feature={feature} summary={summary} />
+        {feature ? (
+          <WatchaHero feature={feature} summary={summary} />
+        ) : (
+          <section className="border-b border-[#e8e3d6]">
+            <div className="mx-auto max-w-[1240px] px-8 py-28 text-center">
+              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#9a958b]">
+                pipeline empty
+              </p>
+              <h1 className="mt-6 font-serif text-[56px] leading-[1.05] tracking-[-0.025em] text-[#161616] sm:text-[72px]">
+                아직 분석된 <span className="italic text-[#ff2c63]">작품</span>이 없습니다.
+              </h1>
+              <p className="mt-5 text-[15px] leading-[1.7] text-[#3d3a35]">
+                백엔드 파이프라인이 다음 배치를 끝내면 이 자리에 첫 번째 영화가 도착합니다.
+              </p>
+            </div>
+          </section>
+        )}
 
         {/* ── Collection 01 ─────────────────────────── */}
         <section className="border-b border-[#e8e3d6]">
@@ -71,7 +86,7 @@ export default function WatchaPediaPage() {
                   <em className="not-italic font-medium text-[#161616]">
                     호감 비율
                   </em>
-                  입니다. 카드를 누르면 해당 영화의 분석 페이지로 이동합니다.
+                  입니다. 카드를 누르면 미리 분석된 결과 페이지로 바로 이동합니다.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">

@@ -1,15 +1,25 @@
 import Link from "next/link";
 
-import { fetchDashboardMovies } from "@/lib/dashboard";
+import {
+  fetchDashboardMovies,
+  fetchDashboardSummary,
+} from "@/lib/dashboard";
 
 import MovieCardGrid from "@/components/dashboard/MovieCardGrid";
+import RecentNoticeBanner from "@/components/dashboard/RecentNoticeBanner";
 
 export default async function MoviesPage() {
-  const moviesResponse = await fetchDashboardMovies();
+  const [moviesResponse, summary] = await Promise.all([
+    fetchDashboardMovies(),
+    fetchDashboardSummary(),
+  ]);
 
   return (
     <main className="min-h-screen bg-gray-50 px-6 py-10">
       <div className="mx-auto max-w-7xl">
+        {/* 최근 분석 공지 */}
+        <RecentNoticeBanner activities={summary.recent_activities} />
+
         {/* 헤더 */}
         <div className="mb-8 flex items-start justify-between">
           <div>

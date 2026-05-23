@@ -1,7 +1,9 @@
 import Link from "next/link";
 import SentimentRatio from "@/components/SentimentRatio";
+import ElementScoreChart from "@/components/ElementScoreChart";
 import ResultReviewSection from "@/components/ResultReviewSection";
 import { getFinalResult, getOpinionGroups } from "@/lib/api";
+import { fetchElementScores } from "@/lib/element-scores";
 
 type ResultPageProps = {
   params: Promise<{
@@ -65,9 +67,13 @@ function normalizeOpinionGroups(
 export default async function ResultPage({ params }: ResultPageProps) {
   const { jobId } = await params;
 
-  const finalResult = (await getFinalResult(jobId)) as ApiFinalResult;
-  const opinionGroupsResponse =
-    (await getOpinionGroups(jobId)) as OpinionGroupsResponse;
+  const [finalResultRaw, opinionGroupsRaw, elementScores] = await Promise.all([
+    getFinalResult(jobId),
+    getOpinionGroups(jobId),
+    fetchElementScores(jobId),
+  ]);
+  const finalResult = finalResultRaw as ApiFinalResult;
+  const opinionGroupsResponse = opinionGroupsRaw as OpinionGroupsResponse;
 
   const opinionGroups = normalizeOpinionGroups(opinionGroupsResponse);
   const sentimentRatio = finalResult.summary.sentiment_ratio;
@@ -109,17 +115,10 @@ export default async function ResultPage({ params }: ResultPageProps) {
               negativePercent={sentimentRatio.negative_percent}
             />
 
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6">
-              <h2 className="text-lg font-bold text-gray-900">요약</h2>
-
-              <p className="mt-3 leading-7 text-gray-600">
-                의견 그룹을 선택하면 해당 그룹의 리뷰를 확인할 수 있습니다.
-              </p>
-
-              <p className="mt-4 text-sm font-semibold text-gray-500">
-                분석 리뷰 수: {sentimentRatio.total_review_count ?? "-"}개
-              </p>
-            </div>
+            <ElementScoreChart
+              scores={elementScores}
+              totalReviewCount={sentimentRatio.total_review_count ?? null}
+            />
           </div>
 
           <ResultReviewSection jobId={effectiveJobId} groups={opinionGroups} />
