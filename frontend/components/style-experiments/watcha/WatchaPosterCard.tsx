@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { DashboardMovie } from "@/lib/types";
 
 // Deterministic poster gradient — moody, film-still palette
@@ -23,21 +24,49 @@ function gradientFor(id: string): string {
 type Props = {
   movie: DashboardMovie;
   rank?: number;
+  /**
+   * Link target for the card.
+   * - `string`: render as a Link.
+   * - `null`: render disabled (no analysis result yet).
+   * - omitted: defaults to the style-experiment result page.
+   */
+  href?: string | null;
 };
 
-export default function WatchaPosterCard({ movie, rank }: Props) {
+export default function WatchaPosterCard({
+  movie,
+  rank,
+  href = "/style-experiments/watcha/result",
+}: Props) {
   const grad = gradientFor(movie.movie_id);
   const top = movie.top_keywords.slice(0, 3);
   const pos = movie.sentiment.positive_percent;
+  const disabled = href === null;
+
+  const Wrapper = ({ children }: { children: ReactNode }) =>
+    disabled ? (
+      <div
+        className="group block cursor-not-allowed"
+        aria-disabled="true"
+        title="아직 분석 결과가 없습니다"
+      >
+        {children}
+      </div>
+    ) : (
+      <Link href={href as string} className="group block">
+        {children}
+      </Link>
+    );
 
   return (
-    <Link
-      href="/style-experiments/watcha/result"
-      className="group block"
-    >
+    <Wrapper>
       {/* Poster */}
       <div
-        className="relative aspect-[2/3] w-full overflow-hidden rounded-[6px] shadow-[0_2px_10px_-3px_rgba(20,15,5,0.22)] transition-transform duration-500 ease-out group-hover:-translate-y-1 group-hover:shadow-[0_18px_36px_-12px_rgba(20,15,5,0.35)]"
+        className={`relative aspect-[2/3] w-full overflow-hidden rounded-[6px] shadow-[0_2px_10px_-3px_rgba(20,15,5,0.22)] transition-transform duration-500 ease-out ${
+          disabled
+            ? "opacity-70 grayscale"
+            : "group-hover:-translate-y-1 group-hover:shadow-[0_18px_36px_-12px_rgba(20,15,5,0.35)]"
+        }`}
         style={{ background: grad }}
       >
         {/* Top stripe — rank + source pill, always visible (above the overlay) */}
@@ -65,8 +94,21 @@ export default function WatchaPosterCard({ movie, rank }: Props) {
           </h3>
         </div>
 
+        {/* "분석 결과 없음" notice — only when disabled */}
+        {disabled && (
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 z-30 -translate-y-1/2 px-5 text-center">
+            <span className="inline-block rounded-full bg-black/55 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/85 backdrop-blur">
+              분석 결과 없음
+            </span>
+          </div>
+        )}
+
         {/* Hover overlay — fades in on hover, covers the title block area */}
-        <div className="absolute inset-0 z-10 flex flex-col justify-end bg-gradient-to-t from-[#0a0507]/95 via-[#0a0507]/65 to-transparent p-5 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+        <div
+          className={`absolute inset-0 z-10 flex flex-col justify-end bg-gradient-to-t from-[#0a0507]/95 via-[#0a0507]/65 to-transparent p-5 opacity-0 transition-opacity duration-300 ${
+            disabled ? "" : "group-hover:opacity-100"
+          }`}
+        >
           <p className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-white/55">
             관객 의견 · top 3
           </p>
@@ -105,7 +147,11 @@ export default function WatchaPosterCard({ movie, rank }: Props) {
       {/* Meta — Watcha-style score block */}
       <div className="mt-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate font-serif text-[18px] font-medium leading-tight tracking-tight text-[#161616] transition-colors group-hover:text-[#ff2c63]">
+          <h3
+            className={`truncate font-serif text-[18px] font-medium leading-tight tracking-tight text-[#161616] transition-colors ${
+              disabled ? "" : "group-hover:text-[#ff2c63]"
+            }`}
+          >
             {movie.movie_title}
           </h3>
           <p className="mt-1 text-[12.5px] leading-tight text-[#6b6760]">
@@ -141,6 +187,6 @@ export default function WatchaPosterCard({ movie, rank }: Props) {
           ♡ {top[0]?.label ?? "—"}
         </span>
       </div>
-    </Link>
+    </Wrapper>
   );
 }
