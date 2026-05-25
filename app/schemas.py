@@ -16,6 +16,90 @@ JobStatus = Literal[
     "failed",
 ]
 
+
+class CollectedMovie(BaseModel):
+    source: str = Field(..., examples=["kobis"])
+    external_movie_id: str = Field(..., examples=["20239012"])
+    movie_title: str = Field(..., examples=["파묘"])
+    poster_url: Optional[str] = Field(default=None)
+    release_date: Optional[date] = Field(default=None, examples=["2024-02-22"])
+    genre: Optional[str] = Field(default=None, examples=["공포,스릴러"])
+
+
+class CollectedReview(BaseModel):
+    source: str = Field(..., examples=["cgv"])
+    movie_id: str = Field(..., examples=["kobis_20239012"])
+    external_review_id: Optional[str] = Field(default=None, examples=["123456789"])
+    author: Optional[str] = Field(default=None, examples=["user***"])
+    rating: Optional[float] = Field(default=None, examples=[9.0])
+    text: str = Field(..., examples=["배우 연기가 좋았다"])
+    written_at: Optional[datetime] = Field(default=None)
+
+
+CollectionJobStatus = Literal["queued", "running", "completed", "failed"]
+CollectionMode = Literal["run_now", "scheduled"]
+CollectionDepth = Literal["preview", "full"]
+
+
+class CollectionRunRequest(BaseModel):
+    movie_id: str = Field(..., examples=["kobis_20252402"])
+    cgv_movie_code: Optional[str] = Field(default=None, examples=["30001046"])
+    source: str = Field(default="cgv", examples=["cgv"])
+    depth: CollectionDepth = Field(
+        default="preview",
+        description="'preview' = ~50 reviews, ~30-60s response. 'full' = all reviews, "
+                    "5-15 min (use when caller is okay with long wait, e.g., user "
+                    "clicked then walked away).",
+    )
+    run_analysis: bool = Field(
+        default=False,
+        description="If true, run the full analysis pipeline (LLM → cluster → final) "
+                    "after collection. Only triggers if new reviews were inserted.",
+    )
+
+
+class CollectionJobResponse(BaseModel):
+    collection_job_id: str
+    source: str
+    mode: CollectionMode
+    target_movie_id: str
+    source_external_id: Optional[str]
+    status: CollectionJobStatus
+    started_at: datetime
+    finished_at: Optional[datetime]
+    total_fetched: int
+    total_inserted: int
+    error_message: Optional[str]
+    analysis_job_id: Optional[str] = Field(
+        default=None,
+        description="batch_jobs.job_id of the analysis pipeline triggered after collection. "
+                    "Populated only when run_analysis=true and new reviews were inserted.",
+    )
+    analysis_status: Optional[str] = Field(
+        default=None,
+        description="completed / failed / skipped_no_new / not_requested",
+    )
+
+
+class SubscribeRequest(BaseModel):
+    movie_id: str = Field(..., examples=["kobis_20252402"])
+    cgv_movie_code: Optional[str] = Field(default=None, examples=["30001046"])
+    source: str = Field(default="cgv", examples=["cgv"])
+
+
+class SubscribeResponse(BaseModel):
+    subscribed: bool
+    movie_id: str
+    source: str
+    cgv_movie_code: str
+    already_subscribed: bool
+    collection_job_id: str
+    next_batch_at: Optional[str] = Field(
+        default=None,
+        description="ISO timestamp of next scheduled batch run (KST). "
+                    "None if scheduler disabled.",
+    )
+
 # 데이터셋용 리뷰 스키마
 class DatasetReviewSchema(BaseModel):
     movie_id: str

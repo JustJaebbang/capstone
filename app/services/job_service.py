@@ -1,7 +1,9 @@
-from datetime import datetime
+import logging
+from datetime import date, datetime
 from typing import List, Optional
 
 from app.db.models.batch_job import BatchJob
+from app.db.models.movie import Movie
 from app.db.session import SessionLocal
 from app.schemas import (
     BatchJobSchema,
@@ -13,6 +15,8 @@ from app.schemas import (
     OpinionGroupListResponse,
     OpinionGroupReviewsResponse,
 )
+
+logger = logging.getLogger(__name__)
 from app.services.llm_service import extract_phrases_with_sentiment
 from app.services.cluster_service import build_cluster_request_for_job, run_cluster_module
 from app.services.review_service import fetch_reviews
@@ -339,3 +343,62 @@ def get_opinion_groups(job) -> dict:
         items=[OpinionGroupListItem(**item) for item in db_items],
         total_count=len(db_items),
     ).model_dump(mode="json")
+
+
+def run_full_pipeline(
+    movie_id: str,
+    target_date: Optional[date] = None,
+    llm_mode: str = "rule_based",
+    cluster_mode: str = "hdbscan",
+    review_limit: int = 1000,
+) -> BatchJobSchema:
+    """One-shot pipeline: create batch_job -> LLM -> cluster -> final.
+
+    Used by:
+    - scheduler nightly batch (after fresh review collection)
+    - API run-now-with-analysis path
+    - any other internal trigger that needs the full pipeline
+
+    Reads reviews from the DB only (toclaude2 §"기존 분석 파이프라인 연결 원칙").
+    The pipeline is unaware of which collector populated the reviews — that
+    separation is preserved.
+
+    Raises ValueError if the movie isn't in the movies table.
+    """
+    db = SessionLocal()
+    try:
+        movie = db.query(Movie).filter(Movie.movie_id == movie_id).one_or_none()
+        if movie is None:
+            raise ValueError(f"movie_id '{movie_id}' not found in movies table")
+        movie_title = movie.movie_title
+    finally:
+        db.close()
+
+    if target_date is None:
+        target_date = date.today()
+
+    payload = CreateBatchJobRequest(movie_id=movie_id, target_date=target_date)
+    job = create_job(payload, movie_title=movie_title)
+    logger.info("pipeline created batch_job %s for movie %s", job.job_id, movie_id)
+
+    try:
+        update_job_status(job.job_id, "llm_processing")
+        run_llm_for_job(job, review_limit=review_limit, source_mode="real", llm_mode=llm_mode)
+
+        update_job_status(job.job_id, "clustering")
+        run_cluster_for_job(job, cluster_mode=cluster_mode)
+
+        update_job_status(job.job_id, "saving_results")
+        run_final_for_job(job)
+
+        update_job_status(job.job_id, "completed")
+        logger.info("pipeline completed for batch_job %s", job.job_id)
+    except Exception:
+        logger.exception("pipeline failed for batch_job %s", job.job_id)
+        try:
+            update_job_status(job.job_id, "failed")
+        except Exception:
+            logger.exception("failed to mark job %s as failed", job.job_id)
+        raise
+
+    return get_job(job.job_id)
