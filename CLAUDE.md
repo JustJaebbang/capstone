@@ -69,7 +69,6 @@ JSON files in `data/` (`jobs.json`, `llm_results.json`, `cluster_results.json`, 
 Verification gates in `scripts/`:
 - `verify_routes.py` — HTTP contract for read endpoints + POST validation
 - `verify_pipeline_e2e.py` — full create→run-llm→run-cluster→build-final flow with cleanup
-- `verify_db_parity.py` — placeholder (sections empty post-migration; reserved for future DB-only invariant checks)
 
 ### Pipeline flow
 
@@ -97,5 +96,4 @@ Next.js 16.2.4 + React 19 + Tailwind 4. **`frontend/AGENTS.md` warns this versio
 
 ### Other directories
 
-- `legacy-streamlit/` — earlier Streamlit prototype, not part of the current pipeline.
 - `alembic/versions/` — migrations; `alembic/env.py` imports `app.db.models` so autogenerate sees all tables.
