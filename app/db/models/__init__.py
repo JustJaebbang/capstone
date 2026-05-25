@@ -1,4 +1,5 @@
 from app.db.models.batch_job import BatchJob
+from app.db.models.collection_job import CollectionJob
 from app.db.models.llm_phrase import LLMPhrase
 from app.db.models.movie import Movie
 from app.db.models.movie_summary import MovieSummary
@@ -10,6 +11,7 @@ __all__ = [
     "Movie",
     "Review",
     "BatchJob",
+    "CollectionJob",
     "LLMPhrase",
     "OpinionGroup",
     "ReviewClusterMap",
