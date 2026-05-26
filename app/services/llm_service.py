@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 
 from dotenv import load_dotenv
@@ -11,6 +12,7 @@ from app.schemas import (
     LLMResponseSchema,
     LLMResultItem,
     PhraseSentimentItem,
+    ReviewItem,
 )
 
 # pydantic-settings는 .env의 database_url만 읽고 os.environ까지 전파하지 않으므로
@@ -182,20 +184,10 @@ def extract_phrases_rule_based(payload: LLMRequestSchema) -> LLMResponseSchema:
     )
 
 
-def extract_phrases_openai(payload: LLMRequestSchema) -> LLMResponseSchema:
-    client = _get_openai_client()
+_OPENAI_CHUNK_SIZE = 200
+_OPENAI_MAX_WORKERS = 5
 
-    if client is None:
-        print("[LLM] OPENAI_API_KEY not found. Fallback to rule_based mode.")
-        return extract_phrases_rule_based(payload)
-
-    reviews_json = json.dumps(
-        [{"review_id": r.review_id, "text": r.text} for r in payload.reviews],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-
-    system_instruction = """
+_OPENAI_SYSTEM_INSTRUCTION = """
 당신은 한국어 영화 리뷰를 클러스터링하기 좋은 (phrase, sentiment) 쌍으로 정리하는 분석기입니다.
 
 == 작업 흐름 (각 리뷰마다 순서대로) ==
@@ -220,6 +212,31 @@ def extract_phrases_openai(payload: LLMRequestSchema) -> LLMResponseSchema:
 == 출력 형식 ==
 - 출력은 JSON 객체만. 설명, 마크다운, 코드블록은 절대 쓰지 않습니다.
 """
+
+
+def _build_results_rule_based(reviews: List[ReviewItem]) -> List[LLMResultItem]:
+    results: List[LLMResultItem] = []
+    for review in reviews:
+        phrases = extract_key_phrases_rule_based(review.text)
+        results.append(
+            LLMResultItem(
+                review_id=review.review_id,
+                phrases=build_phrase_items(phrases),
+            )
+        )
+    return results
+
+
+def _extract_chunk_openai(
+    client: OpenAI,
+    chunk: List[ReviewItem],
+    chunk_idx: int,
+) -> List[LLMResultItem]:
+    reviews_json = json.dumps(
+        [{"review_id": r.review_id, "text": r.text} for r in chunk],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
 
     prompt = f"""
 아래 영화 리뷰 배열을 분석하세요.
@@ -254,48 +271,108 @@ def extract_phrases_openai(payload: LLMRequestSchema) -> LLMResponseSchema:
         response = client.chat.completions.create(
             model="gpt-5.4-nano",
             messages=[
-                {"role": "system", "content": system_instruction},
+                {"role": "system", "content": _OPENAI_SYSTEM_INSTRUCTION},
                 {"role": "user", "content": prompt},
             ],
             response_format={"type": "json_object"},
             temperature=0.3,
         )
 
+        finish_reason = response.choices[0].finish_reason
+        if finish_reason == "length":
+            print(
+                f"[LLM] chunk {chunk_idx} truncated by output token limit "
+                f"(finish_reason=length); missing items will fall back to rule_based"
+            )
+
         content = response.choices[0].message.content
         parsed = json.loads(content)
 
-        results: List[LLMResultItem] = []
+        by_review_id: dict[str, LLMResultItem] = {}
         for item in parsed.get("results", []):
-            phrase_items = []
-            for phrase in item.get("phrases", []):
-                phrase_items.append(
-                    PhraseSentimentItem(
-                        text=phrase["text"],
-                        sentiment=phrase["sentiment"],
-                    )
-                )
-
-            results.append(
-                LLMResultItem(
-                    review_id=item["review_id"],
-                    phrases=phrase_items,
-                )
+            phrase_items = [
+                PhraseSentimentItem(text=p["text"], sentiment=p["sentiment"])
+                for p in item.get("phrases", [])
+            ]
+            by_review_id[item["review_id"]] = LLMResultItem(
+                review_id=item["review_id"],
+                phrases=phrase_items,
             )
 
-        return LLMResponseSchema(
-            job_id=payload.job_id,
-            movie_id=payload.movie_id,
-            movie_title=payload.movie_title,
-            results=results,
-        )
+        results: List[LLMResultItem] = []
+        missing = 0
+        for review in chunk:
+            hit = by_review_id.get(review.review_id)
+            if hit is not None:
+                results.append(hit)
+            else:
+                missing += 1
+                phrases = extract_key_phrases_rule_based(review.text)
+                results.append(
+                    LLMResultItem(
+                        review_id=review.review_id,
+                        phrases=build_phrase_items(phrases),
+                    )
+                )
+        if missing:
+            print(
+                f"[LLM] chunk {chunk_idx} filled {missing}/{len(chunk)} missing "
+                f"review_ids via rule_based"
+            )
+        return results
 
     except (ValueError, json.JSONDecodeError, KeyError, TypeError) as e:
-        print(f"[LLM] OpenAI response parse failed: {e}")
-        return extract_phrases_rule_based(payload)
+        print(
+            f"[LLM] chunk {chunk_idx} parse failed ({e}); "
+            f"falling back to rule_based for whole chunk"
+        )
+        return _build_results_rule_based(chunk)
 
     except (APIError, OpenAIError, TimeoutError) as e:
-        print(f"[LLM] OpenAI call failed: {e}")
+        print(
+            f"[LLM] chunk {chunk_idx} OpenAI call failed ({e}); "
+            f"falling back to rule_based for whole chunk"
+        )
+        return _build_results_rule_based(chunk)
+
+
+def extract_phrases_openai(payload: LLMRequestSchema) -> LLMResponseSchema:
+    client = _get_openai_client()
+
+    if client is None:
+        print("[LLM] OPENAI_API_KEY not found. Fallback to rule_based mode.")
         return extract_phrases_rule_based(payload)
+
+    reviews = list(payload.reviews)
+    chunks = [
+        reviews[i : i + _OPENAI_CHUNK_SIZE]
+        for i in range(0, len(reviews), _OPENAI_CHUNK_SIZE)
+    ]
+    print(
+        f"[LLM] openai chunking: {len(reviews)} reviews -> {len(chunks)} chunks "
+        f"of {_OPENAI_CHUNK_SIZE} (max_workers={_OPENAI_MAX_WORKERS})"
+    )
+
+    chunk_results: dict[int, List[LLMResultItem]] = {}
+    with ThreadPoolExecutor(max_workers=_OPENAI_MAX_WORKERS) as executor:
+        future_to_idx = {
+            executor.submit(_extract_chunk_openai, client, chunk, idx): idx
+            for idx, chunk in enumerate(chunks)
+        }
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            chunk_results[idx] = future.result()
+
+    all_results: List[LLMResultItem] = []
+    for idx in range(len(chunks)):
+        all_results.extend(chunk_results[idx])
+
+    return LLMResponseSchema(
+        job_id=payload.job_id,
+        movie_id=payload.movie_id,
+        movie_title=payload.movie_title,
+        results=all_results,
+    )
 
 
 def extract_phrases_with_sentiment(
