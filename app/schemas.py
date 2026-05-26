@@ -222,9 +222,26 @@ class SentimentRatioSchema(BaseModel):
     rule: str
 
 
+class ElementScoreItem(BaseModel):
+    element: str = Field(..., examples=["스토리"])
+    score: Optional[float] = Field(
+        default=None,
+        description="긍정 비율 × 100 (0~100). 언급된 phrase가 없으면 null.",
+        examples=[78.0],
+    )
+    positive_count: int = Field(default=0, examples=[235])
+    negative_count: int = Field(default=0, examples=[65])
+    mention_count: int = Field(
+        default=0,
+        description="positive_count + negative_count",
+        examples=[300],
+    )
+
+
 class FinalSummarySchema(BaseModel):
     top_opinions: List[TopOpinionItem]
     sentiment_ratio: SentimentRatioSchema
+    element_scores: List[ElementScoreItem] = Field(default_factory=list)
 
 
 class FinalResultSchema(BaseModel):
@@ -271,6 +288,53 @@ class OpinionGroupListResponse(BaseModel):
     job_id: str
     items: List[OpinionGroupListItem]
     total_count: int
+
+
+class DashboardTopKeyword(BaseModel):
+    rank: int = Field(..., examples=[1])
+    topic: str = Field(..., examples=["연기"])
+    sentiment: Literal["positive", "negative"]
+    label: str = Field(..., examples=["연기가 좋아요"])
+    count: int = Field(..., examples=[328])
+
+
+class DashboardSentimentRatio(BaseModel):
+    positive_percent: float = Field(..., examples=[72.0])
+    negative_percent: float = Field(..., examples=[28.0])
+
+
+class DashboardMovieItem(BaseModel):
+    movie_id: str = Field(..., examples=["kobis_20239012"])
+    movie_title: str = Field(..., examples=["파묘"])
+    poster_url: Optional[str] = Field(default=None)
+    genre: Optional[str] = Field(default=None, examples=["공포,스릴러"])
+    release_year: Optional[int] = Field(default=None, examples=[2024])
+    release_date: Optional[date] = Field(default=None, examples=["2024-02-22"])
+    source: Optional[str] = Field(default=None, examples=["kobis"])
+    total_review_count: int = Field(default=0, examples=[1243])
+    sentiment_ratio: DashboardSentimentRatio
+    top_keywords: List[DashboardTopKeyword] = Field(default_factory=list)
+
+
+class DashboardMoviesResponse(BaseModel):
+    items: List[DashboardMovieItem]
+    total_count: int
+
+
+class DashboardRecentJob(BaseModel):
+    job_id: str = Field(..., examples=["job_021"])
+    movie_id: str = Field(..., examples=["mv_001"])
+    movie_title: str = Field(..., examples=["파묘"])
+    status: JobStatus
+    finished_at: Optional[datetime] = None
+
+
+class DashboardSummaryResponse(BaseModel):
+    total_movies: int = Field(..., examples=[12])
+    total_completed_jobs: int = Field(..., examples=[8])
+    total_reviews_analyzed: int = Field(..., examples=[24860])
+    recent_jobs: List[DashboardRecentJob] = Field(default_factory=list)
+    updated_at: datetime
 
 
 TopOpinionItem.model_rebuild()

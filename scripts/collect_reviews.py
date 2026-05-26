@@ -2,7 +2,8 @@
 
 Usage:
     uv run python scripts/collect_reviews.py kobis_20239012
-    uv run python scripts/collect_reviews.py kobis_20239012 --max-pages 10
+    uv run python scripts/collect_reviews.py kobis_20239012 --target-count 50
+    uv run python scripts/collect_reviews.py kobis_20239012 --dump-json out.json --cgv-code 30001046
 
 Reads database_url from .env. Writes to reviews table.
 """
@@ -36,15 +37,20 @@ def main(argv: list[str]) -> int:
         default=None,
         help="CGV internal movie code from the detail URL "
              "(e.g., 30001046 from /cnm/cgvChart/movieChart/30001046). "
-             "If omitted, falls back to automated resolver (currently unreliable).",
+             "If omitted, the resolver is used.",
     )
-    parser.add_argument("--max-pages", type=int, default=1, help="(reserved; Playwright path captures page 1 only)")
-    parser.add_argument("--page-size", type=int, default=5, help="(reserved; CGV serves ~5 per natural load)")
+    parser.add_argument(
+        "--target-count",
+        dest="target_count",
+        type=int,
+        default=None,
+        help="Stop after N reviews. Omit for full collection (5-15 min for popular movies).",
+    )
     parser.add_argument(
         "--dump-json",
         dest="dump_json",
         default=None,
-        help="Dump the first API page's raw JSON to this path for debugging, then exit.",
+        help="Dump raw API JSON (target_count=1 fast path) to this file, then exit.",
     )
     parser.add_argument(
         "--debug-dump-dir",
@@ -70,7 +76,7 @@ def main(argv: list[str]) -> int:
             headless=args.headless,
             debug_dump_dir=args.debug_dump_dir,
         ) as client:
-            payload = client.fetch_reviews_page(args.cgv_code)
+            payload = client.fetch_all_reviews(args.cgv_code, target_count=1)
         Path(args.dump_json).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         items = payload.get("data", {}).get("list", []) or []
         logger.info("wrote %s (statusCode=%s, %d review items)",
@@ -82,14 +88,13 @@ def main(argv: list[str]) -> int:
         debug_dump_dir=args.debug_dump_dir,
     )
     logger.info(
-        "fetching reviews movie_id=%s cgv_code=%s",
-        args.movie_id, args.cgv_code or "(auto)",
+        "fetching reviews movie_id=%s cgv_code=%s target_count=%s",
+        args.movie_id, args.cgv_code or "(auto)", args.target_count,
     )
     items = collector.fetch(
         movie_id=args.movie_id,
         cgv_movie_code=args.cgv_code,
-        max_pages=args.max_pages,
-        page_size=args.page_size,
+        target_count=args.target_count,
     )
     logger.info("fetched %d reviews", len(items))
 

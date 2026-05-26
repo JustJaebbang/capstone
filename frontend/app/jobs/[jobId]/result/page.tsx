@@ -1,8 +1,14 @@
 import Link from "next/link";
+
 import SentimentRatio from "@/components/SentimentRatio";
-import TopOpinions from "@/components/TopOpinions";
+import ElementScoreChart from "@/components/ElementScoreChart";
 import ResultReviewSection from "@/components/ResultReviewSection";
+import WatchaFontStyles from "@/components/style-experiments/watcha/WatchaFontStyles";
+import WatchaSentimentRing from "@/components/style-experiments/watcha/WatchaSentimentRing";
+import WatchaFooter from "@/components/style-experiments/watcha/WatchaFooter";
+
 import { getFinalResult, getOpinionGroups } from "@/lib/api";
+import { fetchElementScores } from "@/lib/element-scores";
 
 type ResultPageProps = {
   params: Promise<{
@@ -10,20 +16,11 @@ type ResultPageProps = {
   }>;
 };
 
-type ApiTopOpinion = {
-  rank?: number;
-  topic?: string;
-  sentiment?: string;
-  label: string;
-  count: number;
-};
-
 type ApiFinalResult = {
   job_id?: string;
   movie_id?: string;
   movie_title?: string;
   summary: {
-    top_opinions: ApiTopOpinion[];
     sentiment_ratio: {
       positive_percent: number;
       negative_percent: number;
@@ -63,79 +60,302 @@ function normalizeOpinionGroups(
     ? response
     : response.items ?? response.groups ?? [];
 
-  return groups.map((group) => ({
-    cluster_id: String(group.cluster_id),
-    label: group.label,
-    count: group.count,
-  }));
+  return groups
+    .map((group) => ({
+      cluster_id: String(group.cluster_id),
+      label: group.label,
+      count: group.count,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+// Deterministic poster gradient — moody, film-still palette
+function posterGradient(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  const palettes: Array<[string, string, string]> = [
+    ["#1a1424", "#3b1a3f", "#0d0810"],
+    ["#0e1f1c", "#1e3f3a", "#070f0d"],
+    ["#2a1a14", "#5a2a1a", "#180a05"],
+    ["#0d172a", "#1e2a4a", "#05080f"],
+    ["#2a1010", "#4a1a1a", "#0f0404"],
+    ["#1f1d2c", "#3a2a44", "#0a0a14"],
+  ];
+  const [a, b, c] = palettes[h % palettes.length];
+  return `radial-gradient(120% 80% at 20% 0%, ${a} 0%, ${b} 55%, ${c} 100%)`;
 }
 
 export default async function ResultPage({ params }: ResultPageProps) {
   const { jobId } = await params;
 
-  const finalResult = (await getFinalResult(jobId)) as ApiFinalResult;
-  const opinionGroupsResponse =
-    (await getOpinionGroups(jobId)) as OpinionGroupsResponse;
+  const [finalResultRaw, opinionGroupsRaw, elementScores] = await Promise.all([
+    getFinalResult(jobId),
+    getOpinionGroups(jobId),
+    fetchElementScores(jobId),
+  ]);
+  const finalResult = finalResultRaw as ApiFinalResult;
+  const opinionGroupsResponse = opinionGroupsRaw as OpinionGroupsResponse;
 
   const opinionGroups = normalizeOpinionGroups(opinionGroupsResponse);
   const sentimentRatio = finalResult.summary.sentiment_ratio;
 
-  // 핵심: ResultReviewSection에 undefined가 아니라 실제 job_id를 넘기기
   const effectiveJobId = finalResult.job_id ?? jobId;
+  const movieTitle = finalResult.movie_title ?? "Untitled";
+  const posterSeed = finalResult.movie_id ?? effectiveJobId;
+  const totalReviewCount = sentimentRatio.total_review_count ?? null;
+  const positiveReviewCount = sentimentRatio.positive_review_count ?? null;
+  const negativeReviewCount = sentimentRatio.negative_review_count ?? null;
+  const topGroup = opinionGroups[0];
 
   return (
-    <main className="min-h-screen bg-gray-50 px-6 py-10">
-      <div className="mx-auto w-full max-w-5xl">
-        <Link
-          href="/movies"
-          className="text-sm font-semibold text-blue-600 hover:underline"
-        >
-          ← 영화 목록으로
-        </Link>
+    <main className="min-h-screen bg-[#fbf9f3] text-[#161616] antialiased selection:bg-[#ff2c63]/85 selection:text-white">
+      <WatchaFontStyles />
 
-        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-          <p className="text-sm font-semibold text-blue-600">
-            Analysis Result
-          </p>
-
-          <h1 className="mt-2 text-3xl font-bold text-gray-900">
-            분석 결과 보기
-          </h1>
-
-          <p className="mt-2 text-sm text-gray-500">
-            Job ID: {effectiveJobId}
-          </p>
-
-          {finalResult.movie_title && (
-            <p className="mt-1 text-sm text-gray-500">
-              영화: {finalResult.movie_title}
-            </p>
-          )}
-
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            <SentimentRatio
-              positivePercent={sentimentRatio.positive_percent}
-              negativePercent={sentimentRatio.negative_percent}
-            />
-
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6">
-              <h2 className="text-lg font-bold text-gray-900">요약</h2>
-
-              <p className="mt-3 leading-7 text-gray-600">
-                백엔드 API에서 불러온 최종 분석 결과입니다. 의견 그룹을
-                선택하면 해당 그룹의 리뷰를 확인할 수 있습니다.
-              </p>
-
-              <p className="mt-4 text-sm font-semibold text-gray-500">
-                분석 리뷰 수: {sentimentRatio.total_review_count ?? "-"}개
-              </p>
+      <div className="watcha-page">
+        {/* ── Nav ─────────────────────────────────────── */}
+        <header className="sticky top-0 z-30 border-b border-[#e8e3d6] bg-[#fbf9f3]/85 backdrop-blur">
+          <div className="mx-auto flex max-w-[1240px] items-center justify-between px-8 py-5">
+            <Link href="/" className="flex items-baseline gap-1">
+              <span className="font-serif text-[26px] font-medium tracking-[-0.02em] text-[#161616]">
+                review
+              </span>
+              <span className="font-serif text-[26px] italic font-medium text-[#ff2c63]">
+                pedia
+              </span>
+              <span className="ml-2 hidden font-mono text-[10px] uppercase tracking-[0.24em] text-[#9a958b] sm:inline">
+                / analysis
+              </span>
+            </Link>
+            <div className="flex items-center gap-3">
+              <span className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-[#9a958b] md:inline">
+                job · {effectiveJobId}
+              </span>
+              <Link
+                href="/movies"
+                className="rounded-full border border-[#dcd6c5] bg-transparent px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[#6b6760] hover:bg-[#f0ece0]"
+              >
+                ← 영화 목록으로
+              </Link>
             </div>
           </div>
+        </header>
 
-          <TopOpinions opinions={finalResult.summary.top_opinions} />
+        {/* ── Hero ────────────────────────────────────── */}
+        <section className="border-b border-[#e8e3d6]">
+          <div className="mx-auto max-w-[1240px] px-8 py-16 lg:py-24">
+            <Link
+              href="/movies"
+              className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#6b6760] hover:text-[#ff2c63]"
+            >
+              ← collection
+            </Link>
 
-          <ResultReviewSection jobId={effectiveJobId} groups={opinionGroups} />
+            <div className="mt-10 grid grid-cols-1 gap-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
+              {/* Poster */}
+              <div className="relative">
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -left-4 -top-12 hidden select-none font-serif text-[180px] italic leading-none text-[#efe9d8] lg:block"
+                >
+                  #1
+                </span>
+                <div
+                  className="relative aspect-[3/4] w-full overflow-hidden rounded-[10px] shadow-[0_28px_60px_-22px_rgba(20,15,5,0.4)]"
+                  style={{ background: posterGradient(posterSeed) }}
+                >
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-overlay"
+                    style={{
+                      backgroundImage:
+                        "radial-gradient(rgba(255,255,255,0.6) 1px, transparent 1px)",
+                      backgroundSize: "3px 3px",
+                    }}
+                  />
+                  <div className="absolute inset-0 flex flex-col justify-between p-10">
+                    <div className="flex items-start justify-between">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/55">
+                        분석 결과
+                      </p>
+                      <span className="rounded-full bg-white/10 px-3 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 backdrop-blur">
+                        completed
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/55">
+                        job · {effectiveJobId}
+                      </p>
+                      <h2 className="mt-3 font-serif text-[56px] font-medium leading-[1.02] tracking-[-0.025em] text-white sm:text-[64px]">
+                        {movieTitle}
+                      </h2>
+                    </div>
+                  </div>
+                  {/* completed band */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-[#27ae60]" />
+                </div>
+              </div>
+
+              {/* Meta */}
+              <div className="flex flex-col">
+                <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#9a958b]">
+                  Analysis · 분석 완료
+                </p>
+                <h1 className="mt-5 font-serif text-[58px] font-normal leading-[1.02] tracking-[-0.028em] text-[#161616] sm:text-[72px] lg:text-[84px]">
+                  관객은 <span className="italic text-[#ff2c63]">
+                    {sentimentRatio.positive_percent >= sentimentRatio.negative_percent ? "호감" : "불호"}
+                  </span>으로
+                  <br />
+                  답했습니다.
+                </h1>
+                <p className="mt-6 max-w-[480px] text-[16px] leading-[1.75] text-[#3d3a35]">
+                  {totalReviewCount !== null && (
+                    <>총 {totalReviewCount.toLocaleString()}건의 리뷰가 </>
+                  )}
+                  {opinionGroups.length}개 의견 군집으로 묶였습니다.
+                  {topGroup && (
+                    <>
+                      {" "}가장 큰 목소리는{" "}
+                      <em className="not-italic font-medium text-[#161616]">
+                        &ldquo;{topGroup.label}&rdquo;
+                      </em>
+                      였습니다.
+                    </>
+                  )}
+                </p>
+
+                <div className="mt-10 flex items-center gap-10">
+                  <WatchaSentimentRing
+                    positivePercent={sentimentRatio.positive_percent}
+                    size={180}
+                    thickness={6}
+                  />
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9a958b]">
+                        positive
+                      </p>
+                      <p className="mt-1 flex items-baseline gap-1 font-serif text-[26px] leading-none text-[#ff2c63] tabular-nums">
+                        {sentimentRatio.positive_percent}%
+                        {positiveReviewCount !== null && (
+                          <span className="text-[12px] font-normal text-[#9a958b]">
+                            · {positiveReviewCount.toLocaleString()}건
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9a958b]">
+                        negative
+                      </p>
+                      <p className="mt-1 flex items-baseline gap-1 font-serif text-[26px] leading-none text-[#0f4c5c] tabular-nums">
+                        {sentimentRatio.negative_percent}%
+                        {negativeReviewCount !== null && (
+                          <span className="text-[12px] font-normal text-[#9a958b]">
+                            · {negativeReviewCount.toLocaleString()}건
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stat strip */}
+                <dl className="mt-12 grid grid-cols-3 gap-6 border-t border-[#e8e3d6] pt-8 sm:gap-10">
+                  <div>
+                    <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9a958b]">
+                      총 리뷰
+                    </dt>
+                    <dd className="mt-2 font-serif text-[32px] leading-none text-[#161616] tabular-nums">
+                      {totalReviewCount !== null
+                        ? totalReviewCount.toLocaleString()
+                        : "—"}
+                      <span className="ml-1 text-[13px] font-normal text-[#6b6760]">
+                        건
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9a958b]">
+                      의견 군집
+                    </dt>
+                    <dd className="mt-2 font-serif text-[32px] leading-none text-[#161616] tabular-nums">
+                      {opinionGroups.length}
+                      <span className="ml-1 text-[13px] font-normal text-[#6b6760]">
+                        groups
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9a958b]">
+                      대표 의견
+                    </dt>
+                    <dd className="mt-2 font-serif text-[22px] leading-tight tracking-[-0.01em] text-[#161616]">
+                      {topGroup?.label ?? "—"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </div>
         </section>
+
+        {/* ── 긍정/부정 비율 + 요소별 점수 (2단 유지) ── */}
+        <section className="border-b border-[#e8e3d6] bg-[#f5f1e6]">
+          <div className="mx-auto max-w-[1240px] px-8 py-20">
+            <div className="mb-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#9a958b]">
+                  Editor&apos;s note · 01
+                </p>
+                <h2 className="mt-4 font-serif text-[36px] leading-[1.1] tracking-[-0.02em] text-[#161616] sm:text-[44px]">
+                  감성 비율과 <span className="italic">요소별 점수</span>
+                </h2>
+              </div>
+              <p className="max-w-[420px] text-[14px] leading-[1.7] text-[#3d3a35] md:text-right">
+                관객 반응의 전체 톤과, 영화의 각 요소(스토리·연기·연출 등)가
+                각각 어떻게 평가받았는지를 한 번에 봅니다.
+              </p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <SentimentRatio
+                positivePercent={sentimentRatio.positive_percent}
+                negativePercent={sentimentRatio.negative_percent}
+              />
+              <ElementScoreChart
+                scores={elementScores}
+                totalReviewCount={totalReviewCount}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ── 의견 군집 (TOP 3 + 그 외) ─────────────── */}
+        <section className="border-b border-[#e8e3d6]">
+          <div className="mx-auto max-w-[1240px] px-8 py-20">
+            <div className="mb-2 flex flex-col gap-2">
+              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#9a958b]">
+                Notebook · 02
+              </p>
+              <h2 className="font-serif text-[36px] leading-[1.05] tracking-[-0.02em] text-[#161616] sm:text-[44px]">
+                관객 <span className="italic text-[#ff2c63]">의견 군집</span>
+              </h2>
+              <p className="mt-2 max-w-[560px] text-[15px] leading-[1.7] text-[#3d3a35]">
+                가장 자주 등장한 의견 TOP 3와, 그 뒤를 잇는 군집들입니다.
+                카드를 누르면 해당 군집에 묶인 실제 리뷰가 펼쳐집니다.
+              </p>
+            </div>
+
+            <ResultReviewSection
+              jobId={effectiveJobId}
+              groups={opinionGroups}
+            />
+          </div>
+        </section>
+
+        <WatchaFooter updatedAt={new Date().toISOString()} />
       </div>
     </main>
   );

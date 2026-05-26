@@ -100,13 +100,13 @@ def run_collection_now(
         db.refresh(job)
 
         try:
-            # depth drives both: scroll-driven path (always full_pagination=True
-            # now) and a target-count cap for preview. 'full' lifts the cap to
-            # chase the per-movie Throughput KPI.
+            # depth maps to a target-count cap. 'full' lifts the cap (None)
+            # to chase the per-movie Throughput KPI; 'preview' caps at
+            # PREVIEW_TARGET_COUNT for ~30-60s response.
             target_count = None if depth == "full" else PREVIEW_TARGET_COUNT
             items = _run_source_collector(
                 source, movie_id, cgv_movie_code,
-                full_pagination=True, target_count=target_count,
+                target_count=target_count,
                 cgv_client=cgv_client,
             )
             inserted = _save_via_source_collector(source, items)
@@ -382,7 +382,6 @@ def _run_daily_movie_collection() -> dict[str, int]:
 
 
 def _run_source_collector(source: str, movie_id: str, cgv_movie_code: Optional[str],
-                          full_pagination: bool = False,
                           target_count: Optional[int] = None,
                           cgv_client: Optional[CGVReviewClient] = None):
     if source == "cgv":
@@ -392,7 +391,6 @@ def _run_source_collector(source: str, movie_id: str, cgv_movie_code: Optional[s
         return collector.fetch(
             movie_id=movie_id,
             cgv_movie_code=cgv_movie_code,
-            full_pagination=full_pagination,
             target_count=target_count,
         )
     raise UnsupportedSourceError(source)

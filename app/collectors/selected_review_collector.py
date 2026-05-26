@@ -124,61 +124,6 @@ class CGVReviewClient:
             self._browser = None
             self._context = None
 
-    def fetch_reviews_page(self, cgv_movie_code: str, start_row: int = 0,
-                           list_count: int = 5) -> dict[str, Any]:
-        """Navigate to the CGV movie page and intercept the natural review API call.
-
-        Reviews on CGV's modern site are lazy-loaded by IntersectionObserver
-        when the review section scrolls into view. So we navigate, scroll
-        through the page, then wait for the API call to fire.
-
-        Captures only the FIRST API response — fast path used by run-now for
-        debug/verification. For full pagination use `fetch_all_reviews`.
-        """
-        self._ensure_started()
-        page = self._context.new_page()
-        page.set_default_timeout(self.nav_timeout_ms)
-
-        captured: list = []
-
-        def on_response(response):
-            try:
-                if CGV_REVIEW_API_SEGMENT in response.url and response.status == 200:
-                    captured.append(response)
-            except Exception:
-                pass
-
-        page.on("response", on_response)
-
-        try:
-            url = CGV_DETAIL_URL_TEMPLATE.format(code=cgv_movie_code)
-            page.goto(url, wait_until="domcontentloaded", timeout=self.nav_timeout_ms)
-
-            # Scroll progressively to trigger IntersectionObserver-based lazy loads
-            for _ in range(6):
-                page.evaluate("window.scrollBy(0, document.body.scrollHeight / 6)")
-                page.wait_for_timeout(500)
-
-            # Final wait for late-firing API calls (Cloudflare challenges, slow fetches)
-            page.wait_for_timeout(self.post_load_wait_ms)
-
-            if not captured:
-                self._dump_debug(page, cgv_movie_code)
-                raise RuntimeError(
-                    f"CGV review API was not called during page load for movie {cgv_movie_code}. "
-                    f"Check debug dump (if --debug-dump-dir was set)."
-                )
-
-            payload = captured[0].json()
-            if payload.get("statusCode") != 0:
-                raise RuntimeError(
-                    f"CGV API non-zero status: "
-                    f"{payload.get('statusCode')} {payload.get('statusMessage')}"
-                )
-            return payload
-        finally:
-            page.close()
-
     def fetch_all_reviews(self, cgv_movie_code: str,
                           max_scrolls: int = 2000,
                           scroll_wait_ms: int = 1000,
@@ -211,7 +156,7 @@ class CGVReviewClient:
           - Daily increment (5 new): ~10 sec
           - Quiet movie (0 new): ~5 sec
 
-        Returns same shape as fetch_reviews_page.
+        Returns: dict with `data.list` containing raw review items.
         """
         self._ensure_started()
         page = self._context.new_page()
@@ -418,51 +363,41 @@ class CGVReviewCollector(BaseCollector[CollectedReview]):
             self._owns_client = False
 
     def fetch(self, movie_id: str, cgv_movie_code: Optional[str] = None,
-              max_pages: int = 1, page_size: int = 5,
-              full_pagination: bool = False,
               target_count: Optional[int] = None) -> list[CollectedReview]:
         """Fetch reviews for a movie via CGV's JSON API (Playwright-driven).
 
         If `cgv_movie_code` is given, it's used directly (MVP path — manual
-        mapping). Otherwise the (currently unreliable) CGVMovieResolver is tried.
+        mapping). Otherwise the CGVMovieResolver is tried.
 
-        Modes:
-        - full_pagination=False (default, legacy run-now path):
-            Captures only the first natural API response (~5 reviews).
-            Fast (~10s), for debug/verification only.
-        - full_pagination=True, target_count=None (batch path):
-            Scrolls until exhausted, merges all responses. Slow (5-15 min) but
-            collects every available review. Used by nightly batch for the
-            3000/day Throughput KPI.
-        - full_pagination=True, target_count=N (preview path):
-            Scrolls until N unique reviews accumulated or natural exhaustion,
-            whichever first. ~30-60s for N=50. Used by run-now to give
-            users a meaningful sample without long wait.
+        `target_count`:
+        - None: scroll until exhausted, collect every review (~5-15 min for
+          ~3000 reviews). Used by nightly batch for the Throughput KPI.
+        - int N: stop once N unique reviews accumulated, or natural exhaustion
+          if fewer exist. ~30-60s for N=50. Used by run-now (depth=preview)
+          to give users a meaningful sample without long wait.
         """
         if not cgv_movie_code:
             title, release_year = self._lookup_movie(movie_id)
             if not title:
                 logger.error("movie_id %s not found in movies table", movie_id)
                 return []
-            cgv_movie_code = self.resolver.resolve(title=title, release_year=release_year)
-            if not cgv_movie_code:
+            hit = self.resolver.resolve(title=title, release_year=release_year)
+            if hit is None:
                 logger.error("could not resolve CGV code for %s (%s)", title, release_year)
                 return []
+            cgv_movie_code = hit.code
 
         logger.info(
-            "fetching CGV reviews movie_id=%s cgv_code=%s full_pagination=%s target=%s",
-            movie_id, cgv_movie_code, full_pagination, target_count,
+            "fetching CGV reviews movie_id=%s cgv_code=%s target=%s",
+            movie_id, cgv_movie_code, target_count,
         )
         try:
-            if full_pagination:
-                known_ids = self._load_known_review_ids(movie_id)
-                payload = self.client.fetch_all_reviews(
-                    cgv_movie_code,
-                    known_review_ids=known_ids,
-                    target_count=target_count,
-                )
-            else:
-                payload = self.client.fetch_reviews_page(cgv_movie_code)
+            known_ids = self._load_known_review_ids(movie_id)
+            payload = self.client.fetch_all_reviews(
+                cgv_movie_code,
+                known_review_ids=known_ids,
+                target_count=target_count,
+            )
         finally:
             if self._owns_client:
                 self.client.close()

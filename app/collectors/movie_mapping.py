@@ -46,6 +46,7 @@ window.chrome = window.chrome || { runtime: {} };
 class CGVMovieHit:
     code: str
     title: str
+    poster_url: Optional[str] = None
 
 
 class CGVMovieResolver:
@@ -105,8 +106,8 @@ class CGVMovieResolver:
             self._browser = None
             self._context = None
 
-    def resolve(self, title: str, release_year: Optional[int] = None) -> Optional[str]:
-        """Returns the CGV movie code for the given title, or None if not found.
+    def resolve(self, title: str, release_year: Optional[int] = None) -> Optional[CGVMovieHit]:
+        """Returns the CGV movie hit (code + poster_url) for the given title, or None.
 
         Strategy:
           1. Try the original title as search query.
@@ -130,7 +131,7 @@ class CGVMovieResolver:
                 logger.info(
                     "resolved %r -> %s (via query %r)", title, exact[0].code, variant,
                 )
-                return exact[0].code
+                return exact[0]
             logger.info(
                 "variant %r returned %d hit(s) but no exact match: %s",
                 variant, len(hits), [h.title for h in hits[:3]],
@@ -214,7 +215,7 @@ class CGVMovieResolver:
                     continue
                 seen.add(code)
                 title = re.sub(r"\s*포스터\s*$", "", alt).strip()
-                hits.append(CGVMovieHit(code=code, title=title))
+                hits.append(CGVMovieHit(code=code, title=title, poster_url=src))
             except Exception:
                 continue
         return hits
