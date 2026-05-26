@@ -6,7 +6,6 @@ from app.schemas import ReviewItem
 def fetch_reviews(
     movie_id: str,
     review_limit: int = 50,
-    source_mode: str = "dataset",
 ) -> list[ReviewItem]:
     db = SessionLocal()
 

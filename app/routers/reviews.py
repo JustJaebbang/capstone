@@ -9,13 +9,11 @@ router = APIRouter(prefix="/debug", tags=["debug"])
 def preview_reviews(
     movie_id: str,
     review_limit: int = 5,
-    source_mode: str = "dataset",
 ):
     try:
         reviews = fetch_reviews(
             movie_id=movie_id,
             review_limit=review_limit,
-            source_mode=source_mode,
         )
         return reviews
     except FileNotFoundError as e:
