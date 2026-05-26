@@ -47,12 +47,12 @@ def read_job_status(job_id: str):
 def run_batch_job(
     job_id: str,
     review_limit: int = 1000,
-    source_mode: str = "dataset", 
-    llm_mode: str = "rule_based", 
+    source_mode: str = "dataset",
+    llm_mode: str = "openai",
     ):
     """
     예시:
-    POST /batch/jobs/job_001/run?review_limit=5&source_mode=dataset&llm_mode=rule_based
+    POST /batch/jobs/job_001/run?review_limit=5&source_mode=dataset&llm_mode=openai
     """
     job = get_job(job_id)
     if job is None:

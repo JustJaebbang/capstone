@@ -19,6 +19,7 @@ from app.schemas import (
 logger = logging.getLogger(__name__)
 from app.services.llm_service import extract_phrases_with_sentiment
 from app.services.cluster_service import build_cluster_request_for_job, run_cluster_module
+from app.services.topic_service import reclassify_etc_clusters
 from app.services.review_service import fetch_reviews
 from app.services.result_service import (
     save_llm_phrases_to_db,
@@ -173,10 +174,10 @@ def build_llm_request(
 
 
 def run_llm_for_job(
-    job, 
-    review_limit: int = 50, 
-    source_mode: str = "dataset", 
-    llm_mode: str = "rule_based",
+    job,
+    review_limit: int = 50,
+    source_mode: str = "dataset",
+    llm_mode: str = "openai",
     ) -> dict:
     """
     dataset -> B -> C -> B 전체 실행
@@ -226,6 +227,7 @@ def run_cluster_for_job(
     cluster_request = build_cluster_request_for_job(job)
 
     cluster_response = run_cluster_module(cluster_request, mode=cluster_mode)
+    cluster_response = reclassify_etc_clusters(cluster_response)
     cluster_result = cluster_response.model_dump(mode="json")
 
     save_opinion_groups_to_db(
@@ -348,7 +350,7 @@ def get_opinion_groups(job) -> dict:
 def run_full_pipeline(
     movie_id: str,
     target_date: Optional[date] = None,
-    llm_mode: str = "rule_based",
+    llm_mode: str = "openai",
     cluster_mode: str = "hdbscan",
     review_limit: int = 1000,
 ) -> BatchJobSchema:
