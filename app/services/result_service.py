@@ -322,7 +322,10 @@ def _get_final_result_dict_from_db(job_id: str) -> Optional[dict]:
     if llm_dict is None:
         return None
 
-    from app.services.final_service import calculate_sentiment_ratio
+    from app.services.final_service import (
+        calculate_element_scores,
+        calculate_sentiment_ratio,
+    )
 
     top_opinions = []
     for idx, cluster in enumerate(cluster_dict["clusters"][:TOP_OPINIONS_LIMIT], start=1):
@@ -337,6 +340,9 @@ def _get_final_result_dict_from_db(job_id: str) -> Optional[dict]:
         )
 
     sentiment_ratio = calculate_sentiment_ratio(llm_dict).model_dump(mode="json")
+    element_scores = [
+        item.model_dump(mode="json") for item in calculate_element_scores(llm_dict)
+    ]
 
     return {
         "job_id": cluster_dict["job_id"],
@@ -345,6 +351,7 @@ def _get_final_result_dict_from_db(job_id: str) -> Optional[dict]:
         "summary": {
             "top_opinions": top_opinions,
             "sentiment_ratio": sentiment_ratio,
+            "element_scores": element_scores,
         },
     }
 

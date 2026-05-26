@@ -5,8 +5,6 @@ import {
   fetchDashboardSummary,
 } from "@/lib/dashboard";
 
-import RecentNoticeBanner from "@/components/dashboard/RecentNoticeBanner";
-import WatchaFontStyles from "@/components/style-experiments/watcha/WatchaFontStyles";
 import WatchaNav from "@/components/style-experiments/watcha/WatchaNav";
 import WatchaHero from "@/components/style-experiments/watcha/WatchaHero";
 import WatchaPosterCard from "@/components/style-experiments/watcha/WatchaPosterCard";
@@ -14,14 +12,10 @@ import WatchaKeywordEditorial from "@/components/style-experiments/watcha/Watcha
 import WatchaActivityList from "@/components/style-experiments/watcha/WatchaActivityList";
 import WatchaFooter from "@/components/style-experiments/watcha/WatchaFooter";
 
-function cardHrefFor(movie: { latest_job_id: string | null }): string | null {
-  return movie.latest_job_id ? `/jobs/${movie.latest_job_id}/result` : null;
-}
-
-export default async function MoviesPage() {
-  const [moviesResponse, summary] = await Promise.all([
-    fetchDashboardMovies(),
+export default async function WatchaPediaPage() {
+  const [summary, moviesResponse] = await Promise.all([
     fetchDashboardSummary(),
+    fetchDashboardMovies(),
   ]);
   const movies = moviesResponse.items;
 
@@ -33,16 +27,30 @@ export default async function MoviesPage() {
 
   return (
     <main className="min-h-screen bg-[#fbf9f3] text-[#161616] antialiased selection:bg-[#ff2c63]/85 selection:text-white">
-      <WatchaFontStyles />
+      {/* Scoped page typography + helper classes */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        .watcha-page {
+          font-family: 'Manrope', var(--font-geist-sans), 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+          font-feature-settings: 'ss01';
+          -webkit-font-smoothing: antialiased;
+          color: #161616;
+        }
+        .watcha-page .font-serif {
+          font-family: 'Fraunces', 'Noto Serif KR', 'Apple SD Gothic Neo', Georgia, serif;
+          font-feature-settings: 'lnum';
+        }
+        .watcha-page .font-mono {
+          font-family: 'JetBrains Mono', var(--font-geist-mono), ui-monospace, monospace;
+        }
+        .watcha-page .tabular-nums {
+          font-variant-numeric: tabular-nums lining-nums;
+        }
+      `}</style>
 
       <div className="watcha-page">
         <WatchaNav updatedAt={summary.updated_at} />
-
-        {/* 최근 분석 공지 — watcha 톤에 어울리도록 wrapper만 살짝 */}
-        <div className="mx-auto max-w-[1240px] px-8 pt-6">
-          <RecentNoticeBanner activities={summary.recent_activities} />
-        </div>
-
         {feature ? (
           <WatchaHero feature={feature} summary={summary} />
         ) : (
@@ -109,7 +117,6 @@ export default async function MoviesPage() {
                   key={m.movie_id}
                   movie={m}
                   rank={i + 1}
-                  href={cardHrefFor(m)}
                 />
               ))}
 
@@ -144,10 +151,10 @@ export default async function MoviesPage() {
                 목록이다.&rdquo;
               </p>
               <Link
-                href="/"
+                href="/movies"
                 className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#161616] hover:text-[#ff2c63]"
               >
-                홈으로 →
+                전체 대시보드 →
               </Link>
             </div>
           </div>

@@ -144,12 +144,12 @@ class MovieCollector(BaseCollector[CollectedMovie]):
                 if year is None and movie.release_date:
                     year = movie.release_date.year
                 try:
-                    code = resolver.resolve(movie.movie_title, year)
+                    hit = resolver.resolve(movie.movie_title, year)
                 except Exception:
                     logger.exception("resolver crashed for movie_id=%s", movie.movie_id)
-                    code = None
+                    hit = None
 
-                if not code:
+                if hit is None:
                     summary["unresolved"] += 1
                     continue
 
@@ -159,7 +159,9 @@ class MovieCollector(BaseCollector[CollectedMovie]):
                 try:
                     target = db_w.get(Movie, movie.movie_id)
                     if target is not None:
-                        target.cgv_movie_code = code
+                        target.cgv_movie_code = hit.code
+                        if hit.poster_url and not target.poster_url:
+                            target.poster_url = hit.poster_url
                         target.updated_at = datetime.utcnow()
                         db_w.commit()
                         summary["resolved"] += 1

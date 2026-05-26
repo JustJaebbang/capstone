@@ -28,10 +28,16 @@ export type TopOpinion = {
   count: number;
 };
 
+export type ElementScore = {
+  element: string;
+  score: number; // 0–100
+};
+
 export type FinalResult = {
   summary: {
     sentiment_ratio: SentimentRatio;
     top_opinions: TopOpinion[];
+    element_scores?: ElementScore[];
   };
 };
 

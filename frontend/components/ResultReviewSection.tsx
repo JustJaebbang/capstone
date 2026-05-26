@@ -84,14 +84,21 @@ export default function ResultReviewSection({
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(
     null
   );
-  const [pageByCluster, setPageByCluster] = useState<Record<string, number>>({});
+  const [pageByCluster, setPageByCluster] = useState<Record<string, number>>(
+    {}
+  );
   const [reviews, setReviews] = useState<Review[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const selectedGroup = groups.find(
+  // 상위 3개 = TOP 3, 나머지 = 그 외
+  const sortedGroups = [...groups].sort((a, b) => b.count - a.count);
+  const topThree = sortedGroups.slice(0, 3);
+  const restGroups = sortedGroups.slice(3);
+
+  const selectedGroup = sortedGroups.find(
     (group) => group.cluster_id === selectedClusterId
   );
 
@@ -104,7 +111,6 @@ export default function ResultReviewSection({
       if (current === clusterId) {
         return null;
       }
-
       return clusterId;
     });
 
@@ -174,105 +180,144 @@ export default function ResultReviewSection({
     fetchReviews();
   }, [jobId, selectedClusterId, currentPage]);
 
+  // 펼침 영역 컴포넌트 (TOP 3와 하단에서 공통 사용)
+  const renderExpandedReviews = (group: OpinionGroup) => (
+    <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
+      <div className="mb-4 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-blue-600">
+            Selected Opinion
+          </p>
+          <h3 className="mt-1 text-2xl font-bold text-gray-900">
+            {group.label}
+          </h3>
+        </div>
+        <p className="text-sm font-semibold text-gray-500">
+          총 {totalCount}개 리뷰
+        </p>
+      </div>
+
+      {isLoading && (
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-gray-500">
+          리뷰를 불러오는 중입니다...
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-600">
+          {errorMessage}
+        </div>
+      )}
+
+      {!isLoading && !errorMessage && (
+        <>
+          <ReviewList reviews={reviews} />
+          <Pagination
+            page={currentPage}
+            totalPages={totalPages}
+            onPrev={() =>
+              setPage(group.cluster_id, Math.max(1, currentPage - 1))
+            }
+            onNext={() =>
+              setPage(group.cluster_id, Math.min(totalPages, currentPage + 1))
+            }
+          />
+        </>
+      )}
+    </div>
+  );
+
+  const isTopSelected =
+    selectedGroup && topThree.some((g) => g.cluster_id === selectedGroup.cluster_id);
+
   return (
-    <section className="mt-10">
-      <h2 className="text-xl font-bold text-gray-900">전체 의견 그룹</h2>
-      <p className="mt-2 text-sm text-gray-500">
-        의견 그룹을 선택하면 해당 그룹의 리뷰가 바로 아래에 펼쳐집니다.
-      </p>
+    <>
+      {/* 상단: 많이 나온 의견 TOP 3 */}
+      <section className="mt-10">
+        <h2 className="text-xl font-bold text-gray-900">많이 나온 의견 TOP 3</h2>
 
-      <div className="mt-4 flex flex-col gap-3">
-        {groups.map((group) => {
-          const isSelected = group.cluster_id === selectedClusterId;
-
-          return (
-            <div
-              key={group.cluster_id}
-              className={`rounded-2xl border shadow-sm transition ${
-                isSelected
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-200 bg-white"
-              }`}
-            >
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          {topThree.map((group, index) => {
+            const isSelected = group.cluster_id === selectedClusterId;
+            return (
               <button
+                key={group.cluster_id}
                 type="button"
                 onClick={() => handleSelectGroup(group.cluster_id)}
-                className="flex w-full items-center justify-between px-6 py-4 text-left"
+                className={`rounded-2xl border p-6 text-left shadow-sm transition ${
+                  isSelected
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 bg-white hover:border-blue-300"
+                }`}
               >
-                <div>
-                  <p className="font-semibold text-gray-900">{group.label}</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    클릭해서 관련 리뷰 보기
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-semibold text-gray-500">
-                    {group.count}건
-                  </span>
-                  <span className="text-lg font-bold text-blue-600">
-                    {isSelected ? "−" : "+"}
-                  </span>
-                </div>
+                <p className="text-sm font-semibold text-blue-600">
+                  {index + 1}위
+                </p>
+                <h3 className="mt-3 text-lg font-bold text-gray-900">
+                  {group.label}
+                </h3>
+                <p className="mt-2 text-gray-500">{group.count}건</p>
               </button>
+            );
+          })}
+        </div>
 
-              {isSelected && selectedGroup && (
-                <div className="border-t border-blue-100 bg-white px-6 py-5">
-                  <div className="mb-4 flex items-end justify-between gap-4">
+        {/* TOP 3 중 하나가 선택되면 바로 아래에 리뷰 펼침 */}
+        {isTopSelected && selectedGroup && renderExpandedReviews(selectedGroup)}
+      </section>
+
+      {/* 하단: 그 외 의견 그룹 */}
+      {restGroups.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-xl font-bold text-gray-900">그 외 의견 그룹</h2>
+          <p className="mt-2 text-sm text-gray-500">
+            의견 그룹을 선택하면 해당 그룹의 리뷰가 바로 아래에 펼쳐집니다.
+          </p>
+
+          <div className="mt-4 flex flex-col gap-3">
+            {restGroups.map((group) => {
+              const isSelected = group.cluster_id === selectedClusterId;
+
+              return (
+                <div
+                  key={group.cluster_id}
+                  className={`rounded-2xl border shadow-sm transition ${
+                    isSelected
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 bg-white"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleSelectGroup(group.cluster_id)}
+                    className="flex w-full items-center justify-between px-6 py-4 text-left"
+                  >
                     <div>
-                      <p className="text-sm font-semibold text-blue-600">
-                        Selected Opinion
+                      <p className="font-semibold text-gray-900">
+                        {group.label}
                       </p>
-                      <h3 className="mt-1 text-2xl font-bold text-gray-900">
-                        {selectedGroup.label}
-                      </h3>
+                      <p className="mt-1 text-xs text-gray-500">
+                        클릭해서 관련 리뷰 보기
+                      </p>
                     </div>
 
-                    <p className="text-sm font-semibold text-gray-500">
-                      총 {totalCount}개 리뷰
-                    </p>
-                  </div>
-
-                  {isLoading && (
-                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-gray-500">
-                      리뷰를 불러오는 중입니다...
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm font-semibold text-gray-500">
+                        {group.count}건
+                      </span>
+                      <span className="text-lg font-bold text-blue-600">
+                        {isSelected ? "−" : "+"}
+                      </span>
                     </div>
-                  )}
+                  </button>
 
-                  {errorMessage && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-600">
-                      {errorMessage}
-                    </div>
-                  )}
-
-                  {!isLoading && !errorMessage && (
-                    <>
-                      <ReviewList reviews={reviews} />
-
-                      <Pagination
-                        page={currentPage}
-                        totalPages={totalPages}
-                        onPrev={() =>
-                          setPage(
-                            group.cluster_id,
-                            Math.max(1, currentPage - 1)
-                          )
-                        }
-                        onNext={() =>
-                          setPage(
-                            group.cluster_id,
-                            Math.min(totalPages, currentPage + 1)
-                          )
-                        }
-                      />
-                    </>
-                  )}
+                  {isSelected && renderExpandedReviews(group)}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </section>
+              );
+            })}
+          </div>
+        </section>
+      )}
+    </>
   );
 }

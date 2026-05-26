@@ -381,10 +381,11 @@ class CGVReviewCollector(BaseCollector[CollectedReview]):
             if not title:
                 logger.error("movie_id %s not found in movies table", movie_id)
                 return []
-            cgv_movie_code = self.resolver.resolve(title=title, release_year=release_year)
-            if not cgv_movie_code:
+            hit = self.resolver.resolve(title=title, release_year=release_year)
+            if hit is None:
                 logger.error("could not resolve CGV code for %s (%s)", title, release_year)
                 return []
+            cgv_movie_code = hit.code
 
         logger.info(
             "fetching CGV reviews movie_id=%s cgv_code=%s target=%s",

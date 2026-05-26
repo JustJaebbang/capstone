@@ -10,6 +10,7 @@ from app.routers.reviews import router as reviews_router
 from app.routers.llm import router as llm_router
 from app.routers.cluster import router as cluster_router
 from app.routers.collection import router as collection_router
+from app.routers.dashboard import router as dashboard_router
 from app.services import scheduler as scheduler_service
 
 logging.basicConfig(
@@ -44,6 +45,7 @@ app.include_router(reviews_router)
 app.include_router(llm_router)
 app.include_router(cluster_router)
 app.include_router(collection_router)
+app.include_router(dashboard_router)
 
 @app.get("/")
 def root():
