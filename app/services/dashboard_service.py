@@ -95,6 +95,7 @@ def get_dashboard_movies() -> dict:
                         "negative_percent": summary.negative_percent if summary else 0.0,
                     },
                     "top_keywords": top_keywords,
+                    "latest_job_id": job_id,
                 }
             )
 
