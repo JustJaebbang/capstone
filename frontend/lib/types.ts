@@ -30,7 +30,7 @@ export type TopOpinion = {
 
 export type ElementScore = {
   element: string;
-  score: number; // 0–100
+  score: number | null; // 0–100. 언급된 phrase가 없으면 null
 };
 
 export type FinalResult = {

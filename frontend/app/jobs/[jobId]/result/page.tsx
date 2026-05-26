@@ -8,12 +8,19 @@ import WatchaSentimentRing from "@/components/style-experiments/watcha/WatchaSen
 import WatchaFooter from "@/components/style-experiments/watcha/WatchaFooter";
 
 import { getFinalResult, getOpinionGroups } from "@/lib/api";
-import { fetchElementScores } from "@/lib/element-scores";
 
 type ResultPageProps = {
   params: Promise<{
     jobId: string;
   }>;
+};
+
+type ApiElementScore = {
+  element: string;
+  score: number | null;
+  positive_count: number;
+  negative_count: number;
+  mention_count: number;
 };
 
 type ApiFinalResult = {
@@ -30,6 +37,7 @@ type ApiFinalResult = {
       total_review_count?: number;
       rule?: string;
     };
+    element_scores?: ApiElementScore[];
   };
 };
 
@@ -90,10 +98,9 @@ function posterGradient(seed: string): string {
 export default async function ResultPage({ params }: ResultPageProps) {
   const { jobId } = await params;
 
-  const [finalResultRaw, opinionGroupsRaw, elementScores] = await Promise.all([
+  const [finalResultRaw, opinionGroupsRaw] = await Promise.all([
     getFinalResult(jobId),
     getOpinionGroups(jobId),
-    fetchElementScores(jobId),
   ]);
   const finalResult = finalResultRaw as ApiFinalResult;
   const opinionGroupsResponse = opinionGroupsRaw as OpinionGroupsResponse;
@@ -325,7 +332,7 @@ export default async function ResultPage({ params }: ResultPageProps) {
                 negativePercent={sentimentRatio.negative_percent}
               />
               <ElementScoreChart
-                scores={elementScores}
+                scores={finalResult.summary.element_scores ?? []}
                 totalReviewCount={totalReviewCount}
               />
             </div>
