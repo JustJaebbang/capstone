@@ -1,47 +1,109 @@
 from collections import defaultdict
+from typing import List
 
 from app.schemas import (
+    ElementScoreItem,
     FinalResultSchema,
     FinalSummarySchema,
     TopOpinionItem,
-    OpinionGroupListItem,
-    OpinionGroupListResponse,
     OpinionReviewItem,
     SentimentRatioSchema,
 )
+from app.services.labels import make_label
 
 REVIEWS_PREVIEW_LIMIT = 10
 
-LABEL_MAP = {
-    ("연기", "positive"): "연기가 좋아요",
-    ("연기", "negative"): "연기가 아쉬워요",
-    ("캐릭터", "positive"): "캐릭터가 매력적이에요",
-    ("캐릭터", "negative"): "캐릭터가 아쉬워요",
-    ("스토리", "positive"): "스토리가 좋아요",
-    ("스토리", "negative"): "스토리가 아쉬워요",
-    ("연출", "positive"): "연출이 좋아요",
-    ("연출", "negative"): "연출이 아쉬워요",
-    ("영상미", "positive"): "영상미가 좋아요",
-    ("영상미", "negative"): "영상미가 아쉬워요",
-    ("음향", "positive"): "음향이 좋아요",
-    ("음향", "negative"): "음향이 아쉬워요",
-    ("속도감", "positive"): "전개 속도감이 좋아요",
-    ("속도감", "negative"): "전개가 늘어져요",
-    ("재미", "positive"): "재미있어요",
-    ("재미", "negative"): "재미가 아쉬워요",
-    ("몰입감", "positive"): "몰입감이 높아요",
-    ("몰입감", "negative"): "몰입감이 떨어져요",
-    ("감정", "positive"): "감정적으로 와닿아요",
-    ("감정", "negative"): "감정선이 아쉬워요",
-    ("메시지", "positive"): "메시지가 인상적이에요",
-    ("메시지", "negative"): "메시지가 아쉬워요",
-    ("기타", "positive"): "긍정적인 반응이 있어요",
-    ("기타", "negative"): "아쉬운 반응이 있어요",
-}
+# 6요소 고정 + 매핑 키워드. phrase 텍스트에 키워드가 포함되면 해당 요소로 분류.
+# 순서 = 응답 노출 순서.
+ELEMENT_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("스토리", ("스토리", "서사", "결말", "개연")),
+    ("연기", ("연기", "배우", "캐스팅")),
+    ("몰입감", ("몰입", "긴장")),
+    ("전개", ("전개", "지루", "루즈", "늘어", "템포")),
+    ("재미", ("재미", "재밌", "재미없", "노잼", "흥미")),
+    ("연출", ("연출", "장면", "분위기", "영상미", "비주얼", "화면", "촬영", "색감")),
+]
 
 
-def make_label(topic: str, sentiment: str) -> str:
-    return LABEL_MAP.get((topic, sentiment), f"{topic} ({sentiment})")
+def _classify_phrase_to_element(text: str) -> str | None:
+    for element, keywords in ELEMENT_KEYWORDS:
+        for kw in keywords:
+            if kw in text:
+                return element
+    return None
+
+
+def calculate_element_scores(llm_result: dict) -> List[ElementScoreItem]:
+    """
+    리뷰 단위로 요소별 긍정/부정 언급을 집계.
+    한 리뷰에서 같은 요소에 대해 phrase sentiment가 섞이면 tie로 처리하고
+    sentiment_ratio와 동일하게 50:50 분배.
+    score = 긍정 effective / (긍정 effective + 부정 effective) × 100.
+    언급 0인 요소는 score=None.
+    """
+    per_review: dict[str, dict[str, dict[str, int]]] = defaultdict(
+        lambda: defaultdict(lambda: {"positive": 0, "negative": 0})
+    )
+
+    for item in llm_result["results"]:
+        review_id = item["review_id"]
+        for phrase in item["phrases"]:
+            element = _classify_phrase_to_element(phrase["text"])
+            if element is None:
+                continue
+            sentiment = phrase["sentiment"]
+            if sentiment in ("positive", "negative"):
+                per_review[review_id][element][sentiment] += 1
+
+    tally = {
+        element: {"positive": 0, "negative": 0, "tie": 0}
+        for element, _ in ELEMENT_KEYWORDS
+    }
+
+    for elements_for_review in per_review.values():
+        for element, counts in elements_for_review.items():
+            pos = counts["positive"]
+            neg = counts["negative"]
+            if pos > 0 and neg == 0:
+                tally[element]["positive"] += 1
+            elif neg > 0 and pos == 0:
+                tally[element]["negative"] += 1
+            else:
+                tally[element]["tie"] += 1
+
+    scores: List[ElementScoreItem] = []
+    for element, _ in ELEMENT_KEYWORDS:
+        pos = tally[element]["positive"]
+        neg = tally[element]["negative"]
+        tie = tally[element]["tie"]
+        mention = pos + neg + tie
+
+        if mention == 0:
+            scores.append(
+                ElementScoreItem(
+                    element=element,
+                    score=None,
+                    positive_count=0,
+                    negative_count=0,
+                    mention_count=0,
+                )
+            )
+            continue
+
+        positive_effective = pos + tie * 0.5
+        score = round((positive_effective / mention) * 100, 1)
+
+        scores.append(
+            ElementScoreItem(
+                element=element,
+                score=score,
+                positive_count=pos,
+                negative_count=neg,
+                mention_count=mention,
+            )
+        )
+
+    return scores
 
 
 def collect_reviews_for_cluster(
@@ -151,6 +213,7 @@ def build_final_result(
         )
 
     sentiment_ratio = calculate_sentiment_ratio(llm_result)
+    element_scores = calculate_element_scores(llm_result)
 
     return FinalResultSchema(
         job_id=job.job_id,
@@ -159,46 +222,8 @@ def build_final_result(
         summary=FinalSummarySchema(
             top_opinions=top_opinions,
             sentiment_ratio=sentiment_ratio,
+            element_scores=element_scores,
         ),
     )
 
 
-def get_reviews_for_cluster(
-    job,
-    cluster_id: str,
-    llm_result: dict,
-    cluster_result: dict,
-    source_reviews: list[dict],
-) -> tuple[str, list[OpinionReviewItem]]:
-    for cluster in cluster_result["clusters"]:
-        if cluster["cluster_id"] == cluster_id:
-            label = make_label(cluster["topic"], cluster["sentiment"])
-            reviews = collect_reviews_for_cluster(
-                cluster=cluster,
-                llm_result=llm_result,
-                source_reviews=source_reviews,
-            )
-            return label, reviews
-
-    raise ValueError(f"Cluster not found: {cluster_id}")
-
-
-def build_opinion_group_list(job, cluster_result: dict) -> OpinionGroupListResponse:
-    items = []
-
-    for cluster in cluster_result["clusters"]:
-        items.append(
-            OpinionGroupListItem(
-                cluster_id=cluster["cluster_id"],
-                topic=cluster["topic"],
-                sentiment=cluster["sentiment"],
-                label=make_label(cluster["topic"], cluster["sentiment"]),
-                count=cluster["count"],
-            )
-        )
-
-    return OpinionGroupListResponse(
-        job_id=job.job_id,
-        items=items,
-        total_count=len(items),
-    )

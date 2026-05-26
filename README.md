@@ -1,3 +1,683 @@
+# 2차 파이프라인 공통 설계 문서
+
+## LLM 기반 영화 리뷰 의견 구조화 시스템 (Real Data + PostgreSQL 기반)
+
+---
+
+# 1. 프로젝트 개요
+
+## 프로젝트 목적
+
+대량의 영화 리뷰 데이터를 분석하여 핵심 의견을 구조화하고, 사용자에게 요약된 인사이트를 제공하는 시스템 구축.
+
+---
+
+## 핵심 목표
+
+* 리뷰 데이터 자동 분석
+* 핵심 표현 추출
+* 감정 분석
+* 유사 의견 그룹화
+* 사용자 친화적 요약 제공
+* Real Data 기반 확장 가능한 구조 설계
+
+---
+
+# 2. 시스템 아키텍처
+
+```text
+Real Data / Dataset
+        ↓
+Pipeline (B)
+        ↓
+LLM Module (C)
+        ↓
+Embedding + Clustering (D)
+        ↓
+Final Result Builder
+        ↓
+Frontend (A)
+```
+
+---
+
+# 3. 시스템 역할 분리 (A/B/C/D)
+
+---
+
+## A. Frontend
+
+### 역할
+
+* 결과 시각화
+* 사용자 인터랙션
+* 의견 조회 및 페이지네이션
+
+### 주요 기능
+
+* Top 3 의견 표시
+* 긍정/부정 비율 표시
+* 의견별 리뷰 조회
+* 페이지네이션
+
+### 추천 기술 스택
+
+```text
+Next.js
+TypeScript
+Tailwind CSS
+shadcn/ui
+TanStack Query
+```
+
+---
+
+## B. Pipeline / API Layer
+
+### 역할
+
+* 전체 파이프라인 orchestration
+* Job 관리
+* 모듈 실행
+* 결과 조합
+
+### 주요 기능
+
+* Job 생성
+* run-llm 실행
+* run-cluster 실행
+* final-result 생성
+* 결과 조회 API 제공
+
+### 기술 스택
+
+```text
+FastAPI
+SQLAlchemy
+Alembic
+PostgreSQL
+```
+
+---
+
+## C. LLM Module
+
+### 역할
+
+* 리뷰에서 핵심 표현 추출
+* sentiment 분석
+
+### 출력 형태
+
+```json
+{
+  "review_id": "r001",
+  "phrases": [
+    {
+      "text": "연기 좋음",
+      "sentiment": "positive"
+    },
+    {
+      "text": "스토리 아쉬움",
+      "sentiment": "negative"
+    }
+  ]
+}
+```
+
+---
+
+## D. Embedding + Clustering Module
+
+### 역할
+
+* phrase embedding
+* 유사 의견 그룹화
+
+### 기술 스택
+
+```text
+sentence-transformers
+HDBSCAN
+```
+
+---
+
+# 4. 데이터 처리 흐름
+
+---
+
+## 1단계. 리뷰 수집
+
+### 입력 데이터
+
+```text
+Dataset / Real Data
+```
+
+### 저장 위치
+
+```text
+reviews table
+```
+
+---
+
+## 2단계. LLM 처리
+
+### 수행 작업
+
+* 핵심 표현 추출
+* sentiment 분석
+
+### 저장 위치
+
+```text
+llm_phrases table
+```
+
+---
+
+## 3단계. Embedding
+
+### 수행 작업
+
+* phrase → vector 변환
+
+### 사용 모델
+
+```text
+sentence-transformers
+```
+
+### 목적
+
+* 의미 기반 유사도 계산 가능하게 변환
+
+---
+
+## 4단계. Clustering
+
+### 수행 작업
+
+* 유사한 표현 자동 그룹화
+
+### 사용 알고리즘
+
+```text
+HDBSCAN
+```
+
+### 목적
+
+* 주요 의견 도출
+
+---
+
+## 5단계. Final Result 생성
+
+### 수행 작업
+
+* Top 의견 계산
+* 긍/부정 비율 계산
+* Frontend 응답용 데이터 생성
+
+---
+
+# 5. 임베딩 및 클러스터링 상세 설명
+
+---
+
+## sentence-transformer 역할
+
+### 목적
+
+문장을 의미 기반 숫자 벡터로 변환.
+
+---
+
+### 예시
+
+```text
+"연기 좋다"
+→ [0.12, -0.52, 0.91, ...]
+```
+
+```text
+"배우 연기 최고"
+→ [0.11, -0.49, 0.88, ...]
+```
+
+→ 의미가 비슷하면 벡터 거리도 가까워짐.
+
+---
+
+## HDBSCAN 역할
+
+### 목적
+
+유사한 의미를 가진 표현 자동 그룹화.
+
+---
+
+### 예시
+
+```text
+연기 좋다
+배우 연기 최고
+연기 미쳤다
+```
+
+→ 같은 클러스터로 그룹화.
+
+---
+
+### 특징
+
+* 클러스터 개수 자동 결정
+* 노이즈 제거 가능
+* 밀도 기반 군집화
+
+---
+
+# 6. API 구조
+
+---
+
+## Job 기반 구조
+
+### 실행 API
+
+```text
+POST /batch/jobs
+POST /batch/jobs/{job_id}/run-llm
+POST /batch/jobs/{job_id}/run-cluster
+POST /batch/jobs/{job_id}/build-final
+```
+
+---
+
+## 결과 조회 API
+
+```text
+GET /batch/jobs/{job_id}/final-result
+GET /batch/jobs/{job_id}/opinion-groups
+GET /batch/jobs/{job_id}/opinion-groups/{cluster_id}/reviews
+```
+
+---
+
+# 7. Frontend 데이터 흐름
+
+---
+
+## final-result
+
+### 제공 데이터
+
+* Top 3 의견
+* 긍정/부정 비율
+
+---
+
+## opinion-groups
+
+### 제공 데이터
+
+* 전체 의견 목록
+* count
+* total_count
+
+---
+
+## opinion-group reviews
+
+### 제공 데이터
+
+* 특정 의견 관련 리뷰
+* 페이지네이션
+
+---
+
+# 8. PostgreSQL 기반 DB 구조
+
+---
+
+# 사용 기술
+
+```text
+PostgreSQL
+SQLAlchemy 2.0 ORM
+Alembic
+psycopg
+```
+
+---
+
+# 주요 테이블
+
+---
+
+## movies
+
+```text
+movie_id
+movie_title
+release_year
+source
+```
+
+---
+
+## reviews
+
+```text
+review_id
+movie_id
+text
+source
+collected_at
+is_processed
+```
+
+---
+
+## batch_jobs
+
+```text
+job_id
+movie_id
+status
+created_at
+updated_at
+```
+
+---
+
+## llm_phrases
+
+```text
+phrase_id
+review_id
+movie_id
+text
+sentiment
+created_at
+```
+
+---
+
+## opinion_groups
+
+```text
+cluster_id
+movie_id
+topic
+sentiment
+label
+count
+review_count
+updated_at
+```
+
+---
+
+## review_cluster_map
+
+```text
+id
+cluster_id
+review_id
+```
+
+---
+
+## movie_summary
+
+```text
+movie_id
+positive_percent
+negative_percent
+positive_review_count
+negative_review_count
+tie_review_count
+total_review_count
+updated_at
+```
+
+---
+
+# 9. ORM 구조
+
+---
+
+## ORM 라이브러리
+
+```text
+SQLAlchemy 2.0 ORM
+```
+
+---
+
+## Migration 관리
+
+```text
+Alembic
+```
+
+### 목적
+
+* DB 스키마 변경 이력 관리
+* 안전한 테이블 구조 변경
+
+---
+
+## ORM Model과 API Schema 분리
+
+### ORM Model
+
+```python
+class Review(Base):
+```
+
+→ DB 저장용
+
+---
+
+### Pydantic Schema
+
+```python
+class ReviewResponse(BaseModel):
+```
+
+→ API 응답용
+
+---
+
+# 10. Real Data 확장 전략
+
+---
+
+## 일일 배치 시스템
+
+### 목적
+
+* 신규 리뷰만 처리
+* 전체 재분석 방지
+
+---
+
+## 처리 흐름
+
+```text
+신규 리뷰 수집
+→ is_processed = false 조회
+→ LLM 처리
+→ Clustering
+→ summary 갱신
+→ is_processed = true
+```
+
+---
+
+## 결과 누적 구조
+
+### 목적
+
+* 기존 분석 결과 유지
+* 비용 절감
+* 성능 향상
+
+---
+
+# 11. KPI
+
+---
+
+## 분석 정확도
+
+### 표현 추출
+
+```text
+F1 Score ≥ 0.75
+```
+
+### 클러스터 품질
+
+```text
+Silhouette Score ≥ 0.3
+```
+
+### Top3 의견 적합도
+
+```text
+≥ 70%
+```
+
+---
+
+## 처리 성능
+
+```text
+1000~3000개 리뷰
+하루 단위 처리
+```
+
+---
+
+## 서비스 품질
+
+```text
+API 응답 속도 ≤ 1초
+```
+
+※ 결과 조회 API 기준
+
+---
+
+# 12. KPI 측정 방법
+
+---
+
+## 표현 추출 평가
+
+### 방식
+
+* 사람이 정답 정의
+* Precision / Recall 계산
+
+---
+
+## 클러스터 품질 평가
+
+### 방식
+
+* Silhouette Score 활용
+* 군집 분리도 평가
+
+---
+
+# 13. 향후 계획
+
+---
+
+## OpenAI 기반 LLM 적용
+
+### 목적
+
+* 표현 추출 정확도 향상
+
+---
+
+## DB 구조 고도화
+
+### 목적
+
+* 대용량 데이터 처리
+* 서비스 안정성 향상
+
+---
+
+## 실시간 데이터 확장
+
+### 목적
+
+* 실서비스 대응
+
+---
+
+# 14. 핵심 설계 원칙
+
+---
+
+## 낮은 결합도
+
+* 모듈 독립성 유지
+* API 기반 연결
+
+---
+
+## 높은 응집도
+
+* 역할별 책임 분리
+* 모듈 단일 책임 유지
+
+---
+
+## 확장 가능한 구조
+
+* Real Data 대응 가능
+* DB 기반 확장 가능
+* 모듈 교체 가능
+
+---
+
+# 최종 결론
+
+본 프로젝트는 단순 감성 분석이 아닌,
+대량의 리뷰 데이터를 의미 기반으로 구조화하여 사용자에게 핵심 의견을 제공하는 시스템이다.
+
+또한 PostgreSQL + SQLAlchemy + Alembic 기반 구조를 통해,
+실제 서비스 수준의 확장성과 유지보수성을 고려한 파이프라인으로 발전시키는 것을 목표로 한다.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ---
 

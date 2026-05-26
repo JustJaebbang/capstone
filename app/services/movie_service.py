@@ -1,17 +1,24 @@
-import json
-from pathlib import Path
-from typing import List
-
-from app.schemas import MovieSchema
-
-DATA_PATH = Path("data/movies.json")
+from app.db.models.movie import Movie
+from app.db.session import SessionLocal
 
 
-def get_movies() -> List[MovieSchema]:
-    with DATA_PATH.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    return [MovieSchema(**item) for item in data]
+def get_movies() -> list[dict]:
+    db = SessionLocal()
 
+    try:
+        movies = db.query(Movie).order_by(Movie.movie_id).all()
 
-def get_active_movies() -> List[MovieSchema]:
-    return [movie for movie in get_movies() if movie.is_active]
+        return [
+            {
+                "movie_id": movie.movie_id,
+                "movie_title": movie.movie_title,
+                "release_year": movie.release_year,
+                "source": movie.source,
+                "registered_at": movie.registered_at,
+                "updated_at": movie.updated_at,
+            }
+            for movie in movies
+        ]
+
+    finally:
+        db.close()
