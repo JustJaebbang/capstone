@@ -248,6 +248,7 @@ class FinalResultSchema(BaseModel):
     job_id: str
     movie_id: str
     movie_title: str
+    poster_url: Optional[str] = Field(default=None)
     summary: FinalSummarySchema
 
 
@@ -314,6 +315,11 @@ class DashboardMovieItem(BaseModel):
     total_review_count: int = Field(default=0, examples=[1243])
     sentiment_ratio: DashboardSentimentRatio
     top_keywords: List[DashboardTopKeyword] = Field(default_factory=list)
+    latest_job_id: Optional[str] = Field(
+        default=None,
+        description="가장 최근 completed 상태의 batch job_id. 없으면 null.",
+        examples=["job_021"],
+    )
 
 
 class DashboardMoviesResponse(BaseModel):
