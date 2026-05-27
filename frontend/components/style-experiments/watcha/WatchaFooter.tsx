@@ -14,7 +14,7 @@ export default function WatchaFooter({ updatedAt }: Props) {
   return (
     <footer className="bg-[#161616] text-[#fbf9f3]">
       <div className="mx-auto max-w-[1240px] px-8 py-16">
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_1fr]">
           <div>
             <div className="flex items-baseline gap-1">
               <span className="font-serif text-[28px] font-medium">
@@ -55,37 +55,6 @@ export default function WatchaFooter({ updatedAt }: Props) {
             </ul>
           </div>
 
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#fbf9f3]/40">
-              other editions
-            </p>
-            <ul className="mt-4 space-y-2.5 text-[13.5px] text-[#fbf9f3]/80">
-              <li>
-                <Link
-                  href="/style-experiments/vercel"
-                  className="hover:text-[#ff2c63]"
-                >
-                  — vercel edition
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/style-experiments/brutalist"
-                  className="hover:text-[#ff2c63]"
-                >
-                  — brutalist edition
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/style-experiments/spotify"
-                  className="hover:text-[#ff2c63]"
-                >
-                  — spotify edition
-                </Link>
-              </li>
-            </ul>
-          </div>
         </div>
 
         <div className="mt-14 flex flex-col items-start justify-between gap-2 border-t border-white/10 pt-6 font-mono text-[10px] uppercase tracking-[0.22em] text-[#fbf9f3]/40 sm:flex-row sm:items-center">
