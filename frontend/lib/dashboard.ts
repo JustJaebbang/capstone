@@ -55,8 +55,9 @@ export async function fetchDashboardMovies(): Promise<DashboardMoviesResponse> {
 //
 // 백엔드 응답 모양(app/schemas.py: DashboardMovieItem, DashboardSummaryResponse)을
 // 프론트가 쓰는 DashboardMovie / DashboardSummary 모양으로 변환한다.
+// latest_job_id 는 백엔드가 movie 객체에 직접 실어 보낸다.
 // 백엔드에 없는 필드(avg_processing_seconds, overall_sentiment, top_keywords_overall,
-// latest_job_id 등)는 안전한 기본값으로 채우거나 summary.recent_jobs에서 끌어온다.
+// job_status, job_completed_at 등)는 안전한 기본값(0 / 빈 배열 / null)으로 채운다.
 
 type ApiSentimentRatio = {
   positive_percent: number;
@@ -82,6 +83,7 @@ type ApiDashboardMovieItem = {
   total_review_count: number;
   sentiment_ratio: ApiSentimentRatio;
   top_keywords: ApiTopKeyword[];
+  latest_job_id: string | null;
 };
 
 type ApiDashboardMoviesResponse = {
@@ -103,12 +105,6 @@ type ApiDashboardSummaryResponse = {
   total_reviews_analyzed: number;
   recent_jobs: ApiRecentJob[];
   updated_at: string;
-};
-
-type JobLookupEntry = {
-  job_id: string;
-  status: JobStatus;
-  finished_at: string | null;
 };
 
 function normalizeJobStatus(status: string): JobStatus {
@@ -141,11 +137,7 @@ function adaptTopKeyword(k: ApiTopKeyword): TopKeyword {
   };
 }
 
-function adaptMovie(
-  item: ApiDashboardMovieItem,
-  jobLookup: Map<string, JobLookupEntry>,
-): DashboardMovie {
-  const job = jobLookup.get(item.movie_id) ?? null;
+function adaptMovie(item: ApiDashboardMovieItem): DashboardMovie {
   const sentiment: SentimentRatio = {
     positive_percent: item.sentiment_ratio?.positive_percent ?? 0,
     negative_percent: item.sentiment_ratio?.negative_percent ?? 0,
@@ -160,9 +152,9 @@ function adaptMovie(
     poster_url: item.poster_url,
     release_date: item.release_date,
     genres: splitGenres(item.genre),
-    latest_job_id: job?.job_id ?? null,
-    job_status: job?.status ?? null,
-    job_completed_at: job?.finished_at ?? null,
+    latest_job_id: item.latest_job_id,
+    job_status: null,
+    job_completed_at: null,
     review_count: item.total_review_count,
     sentiment,
     top_keywords: (item.top_keywords ?? []).map(adaptTopKeyword),
@@ -192,22 +184,6 @@ function adaptSummary(api: ApiDashboardSummaryResponse): DashboardSummary {
   };
 }
 
-function buildJobLookup(
-  jobs: ApiRecentJob[],
-): Map<string, JobLookupEntry> {
-  const map = new Map<string, JobLookupEntry>();
-  for (const j of jobs) {
-    // recent_jobs는 최신순으로 오므로 동일 movie_id가 있으면 첫 번째(=최신) 것만 유지
-    if (map.has(j.movie_id)) continue;
-    map.set(j.movie_id, {
-      job_id: j.job_id,
-      status: normalizeJobStatus(j.status),
-      finished_at: j.finished_at,
-    });
-  }
-  return map;
-}
-
 export type DashboardData = {
   movies: DashboardMovie[];
   summary: DashboardSummary;
@@ -219,8 +195,8 @@ export type DashboardData = {
  * 프론트가 쓰는 모양으로 변환해 반환한다.
  *
  * - mock 토글(USE_MOCK)은 보지 않음. 항상 실 API.
- * - latest_job_id 는 summary.recent_jobs 에서 매핑 (최대 5개 영화만 결과 페이지 링크 가능,
- *   나머지는 null → 카드가 disabled 상태로 렌더링).
+ * - latest_job_id 는 movie 객체에 백엔드가 직접 실어 보냄. null 인 영화는
+ *   결과 페이지 링크 없음 → 카드가 disabled 상태로 렌더링.
  * - 호출 실패 시 throw — 호출자가 try/catch 로 에러 UI 처리.
  */
 export async function fetchDashboardData(): Promise<DashboardData> {
@@ -245,11 +221,8 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const summaryApi = (await summaryRes.json()) as ApiDashboardSummaryResponse;
   const moviesApi = (await moviesRes.json()) as ApiDashboardMoviesResponse;
 
-  const jobLookup = buildJobLookup(summaryApi.recent_jobs ?? []);
   const summary = adaptSummary(summaryApi);
-  const movies = (moviesApi.items ?? []).map((it) =>
-    adaptMovie(it, jobLookup),
-  );
+  const movies = (moviesApi.items ?? []).map(adaptMovie);
 
   return {
     movies,

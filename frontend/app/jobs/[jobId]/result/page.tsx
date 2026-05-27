@@ -27,6 +27,7 @@ type ApiFinalResult = {
   job_id?: string;
   movie_id?: string;
   movie_title?: string;
+  poster_url?: string | null;
   summary: {
     sentiment_ratio: {
       positive_percent: number;
@@ -170,17 +171,36 @@ export default async function ResultPage({ params }: ResultPageProps) {
                 </span>
                 <div
                   className="relative aspect-[3/4] w-full overflow-hidden rounded-[10px] shadow-[0_28px_60px_-22px_rgba(20,15,5,0.4)]"
-                  style={{ background: posterGradient(posterSeed) }}
+                  style={
+                    finalResult.poster_url
+                      ? undefined
+                      : { background: posterGradient(posterSeed) }
+                  }
                 >
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-overlay"
-                    style={{
-                      backgroundImage:
-                        "radial-gradient(rgba(255,255,255,0.6) 1px, transparent 1px)",
-                      backgroundSize: "3px 3px",
-                    }}
-                  />
+                  {finalResult.poster_url ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={finalResult.poster_url}
+                        alt={movieTitle}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/60 via-black/25 to-black/70"
+                      />
+                    </>
+                  ) : (
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-overlay"
+                      style={{
+                        backgroundImage:
+                          "radial-gradient(rgba(255,255,255,0.6) 1px, transparent 1px)",
+                        backgroundSize: "3px 3px",
+                      }}
+                    />
+                  )}
                   <div className="absolute inset-0 flex flex-col justify-between p-10">
                     <div className="flex items-start justify-between">
                       <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/55">
