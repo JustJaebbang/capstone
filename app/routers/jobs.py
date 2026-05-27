@@ -1,23 +1,22 @@
 from fastapi import APIRouter, HTTPException
 
 from app.schemas import CreateBatchJobRequest, CreateBatchJobResponse, JobStatusResponse
+from app.services.cluster_service import build_cluster_request_for_job
 from app.services.job_service import (
-    create_job, 
-    get_job, 
-    run_llm_for_job, 
-    run_cluster_for_job,
-    run_final_for_job,
+    create_job,
+    get_job,
     get_opinion_group_reviews,
     get_opinion_groups,
+    run_cluster_for_job,
+    run_final_for_job,
+    run_llm_for_job,
 )
 from app.services.movie_service import get_movies
-from app.services.cluster_service import build_cluster_request_for_job
 from app.services.result_service import (
-    get_llm_result_by_job_id, 
     get_cluster_result_by_job_id,
     get_final_result_by_job_id,
+    get_llm_result_by_job_id,
 )
-
 
 router = APIRouter(prefix="/batch/jobs", tags=["jobs"])
 
@@ -39,34 +38,32 @@ def read_job_status(job_id: str):
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     return JobStatusResponse(job_id=job.job_id, status=job.status)
 
 
 @router.post("/{job_id}/run-llm")
 def run_batch_job(
     job_id: str,
-    review_limit: int = 1000,
-    source_mode: str = "dataset", 
-    llm_mode: str = "rule_based", 
-    ):
+    review_limit: int = 3000,
+    llm_mode: str = "openai",
+):
     """
     예시:
-    POST /batch/jobs/job_001/run?review_limit=5&source_mode=dataset&llm_mode=rule_based
+    POST /batch/jobs/job_001/run-llm?review_limit=5&llm_mode=openai
     """
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    try:    
+    try:
         result = run_llm_for_job(
             job=job,
             review_limit=review_limit,
-            source_mode=source_mode, 
-            llm_mode=llm_mode, 
-            )
+            llm_mode=llm_mode,
+        )
         return result
-        
+
     except NotImplementedError as e:
         raise HTTPException(status_code=501, detail=str(e))
 
@@ -141,7 +138,7 @@ def build_final(job_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 
 @router.get("/{job_id}/final-result")
 def get_final_result(job_id: str):
@@ -180,7 +177,7 @@ def get_opinion_group_reviews_api(
     page: int = 1,
     page_size: int = 20,
 ):
-    
+
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")

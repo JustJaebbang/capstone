@@ -151,7 +151,6 @@ def main() -> int:
             f"/batch/jobs/{test_job_id}/run-llm",
             params={
                 "review_limit": TEST_REVIEW_LIMIT,
-                "source_mode": "dataset",
                 "llm_mode": TEST_LLM_MODE,
             },
         )

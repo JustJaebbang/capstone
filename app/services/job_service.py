@@ -19,6 +19,7 @@ from app.schemas import (
 logger = logging.getLogger(__name__)
 from app.services.llm_service import extract_phrases_with_sentiment
 from app.services.cluster_service import build_cluster_request_for_job, run_cluster_module
+from app.services.topic_service import reclassify_etc_clusters
 from app.services.review_service import fetch_reviews
 from app.services.result_service import (
     save_llm_phrases_to_db,
@@ -143,17 +144,15 @@ def update_job_status(job_id: str, new_status: str) -> None:
 
 
 def build_llm_request(
-    job, 
-    review_limit: int = 50, 
-    source_mode: str = "dataset",
+    job,
+    review_limit: int = 50,
     ) -> LLMRequestSchema:
     """
-    리뷰 데이터 원본(dataset or real)에서 리뷰를 B -> C 요청 스키마로 변환한다.
+    DB의 reviews 테이블에서 리뷰를 읽어 B -> C 요청 스키마로 변환한다.
     """
     source_reviews = fetch_reviews(
         movie_id=job.movie_id,
         review_limit=review_limit,
-        source_mode=source_mode,
     )
 
     reviews = [
@@ -173,23 +172,20 @@ def build_llm_request(
 
 
 def run_llm_for_job(
-    job, 
-    review_limit: int = 50, 
-    source_mode: str = "dataset", 
-    llm_mode: str = "rule_based",
+    job,
+    review_limit: int = 50,
+    llm_mode: str = "openai",
     ) -> dict:
     """
-    dataset -> B -> C -> B 전체 실행
+    DB의 reviews -> B -> C -> B 전체 실행
     """
-    # 1. 데이터 소스에서 리뷰를 읽고 B → C 스키마 생성
+    # 1. DB에서 리뷰를 읽고 B → C 스키마 생성
     llm_request = build_llm_request(
-        job=job, 
+        job=job,
         review_limit=review_limit,
-        source_mode=source_mode,
         )
     payload = llm_request.model_dump(mode="json")
 
-    print(f"[Pipeline] source_mode = {source_mode}")
     print(f"[Pipeline] llm_mode = {llm_mode}")
     
     total_reviews = len(payload["reviews"])
@@ -226,6 +222,7 @@ def run_cluster_for_job(
     cluster_request = build_cluster_request_for_job(job)
 
     cluster_response = run_cluster_module(cluster_request, mode=cluster_mode)
+    cluster_response = reclassify_etc_clusters(cluster_response)
     cluster_result = cluster_response.model_dump(mode="json")
 
     save_opinion_groups_to_db(
@@ -249,7 +246,6 @@ def run_final_for_job(job) -> dict:
     source_reviews = fetch_reviews(
         movie_id=job.movie_id,
         review_limit=1000,
-        source_mode="dataset",
     )
 
     source_reviews_data = [
@@ -348,7 +344,7 @@ def get_opinion_groups(job) -> dict:
 def run_full_pipeline(
     movie_id: str,
     target_date: Optional[date] = None,
-    llm_mode: str = "rule_based",
+    llm_mode: str = "openai",
     cluster_mode: str = "hdbscan",
     review_limit: int = 1000,
 ) -> BatchJobSchema:
@@ -383,7 +379,7 @@ def run_full_pipeline(
 
     try:
         update_job_status(job.job_id, "llm_processing")
-        run_llm_for_job(job, review_limit=review_limit, source_mode="real", llm_mode=llm_mode)
+        run_llm_for_job(job, review_limit=review_limit, llm_mode=llm_mode)
 
         update_job_status(job.job_id, "clustering")
         run_cluster_for_job(job, cluster_mode=cluster_mode)

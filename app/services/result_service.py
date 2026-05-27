@@ -5,6 +5,7 @@ from sqlalchemy import func
 
 from app.db.models.batch_job import BatchJob
 from app.db.models.llm_phrase import LLMPhrase
+from app.db.models.movie import Movie
 from app.db.models.movie_summary import MovieSummary
 from app.db.models.opinion_group import OpinionGroup
 from app.db.models.review import Review
@@ -344,10 +345,21 @@ def _get_final_result_dict_from_db(job_id: str) -> Optional[dict]:
         item.model_dump(mode="json") for item in calculate_element_scores(llm_dict)
     ]
 
+    db = SessionLocal()
+    try:
+        poster_url = (
+            db.query(Movie.poster_url)
+            .filter(Movie.movie_id == cluster_dict["movie_id"])
+            .scalar()
+        )
+    finally:
+        db.close()
+
     return {
         "job_id": cluster_dict["job_id"],
         "movie_id": cluster_dict["movie_id"],
         "movie_title": cluster_dict["movie_title"],
+        "poster_url": poster_url,
         "summary": {
             "top_opinions": top_opinions,
             "sentiment_ratio": sentiment_ratio,
