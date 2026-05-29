@@ -185,10 +185,6 @@ export default async function ResultPage({ params }: ResultPageProps) {
                         alt={movieTitle}
                         className="absolute inset-0 h-full w-full object-cover"
                       />
-                      <div
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/60 via-black/25 to-black/70"
-                      />
                     </>
                   ) : (
                     <div
@@ -202,25 +198,12 @@ export default async function ResultPage({ params }: ResultPageProps) {
                     />
                   )}
                   <div className="absolute inset-0 flex flex-col justify-between p-10">
-                    <div className="flex items-start justify-between">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/55">
-                        분석 결과
-                      </p>
-                      <span className="rounded-full bg-white/10 px-3 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 backdrop-blur">
+                    <div className="flex items-start justify-end">
+                      <span className="rounded-full bg-white/10 px-3 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[#27ae60] backdrop-blur">
                         completed
                       </span>
                     </div>
-                    <div>
-                      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/55">
-                        job · {effectiveJobId}
-                      </p>
-                      <h2 className="mt-3 font-serif text-[56px] font-medium leading-[1.02] tracking-[-0.025em] text-white sm:text-[64px]">
-                        {movieTitle}
-                      </h2>
-                    </div>
                   </div>
-                  {/* completed band */}
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-[#27ae60]" />
                 </div>
               </div>
 
