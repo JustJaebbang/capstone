@@ -42,8 +42,9 @@ CollectionDepth = Literal["preview", "full"]
 
 
 class CollectionRunRequest(BaseModel):
+    # B안: caller passes movie_id only; the backend resolves cgv_movie_code
+    # internally from the movies table (collection_service.run_collection_now).
     movie_id: str = Field(..., examples=["kobis_20252402"])
-    cgv_movie_code: Optional[str] = Field(default=None, examples=["30001046"])
     source: str = Field(default="cgv", examples=["cgv"])
     depth: CollectionDepth = Field(
         default="preview",
@@ -82,8 +83,9 @@ class CollectionJobResponse(BaseModel):
 
 
 class SubscribeRequest(BaseModel):
+    # B안: caller passes movie_id only; the backend resolves cgv_movie_code
+    # internally from the movies table (collection_service.subscribe_to_movie).
     movie_id: str = Field(..., examples=["kobis_20252402"])
-    cgv_movie_code: Optional[str] = Field(default=None, examples=["30001046"])
     source: str = Field(default="cgv", examples=["cgv"])
 
 

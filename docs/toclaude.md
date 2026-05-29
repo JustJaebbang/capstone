@@ -1,11 +1,21 @@
-재영아, /movies 대시보드 실 API 연동 다 끝냈어 — 영화들 잘 뜨고 포스터도 나와. 작업하면서 백엔드에 필요한 게 두 가지 나와서 정리해 보내. 둘 다 급한 건 아니고, 시간 될 때 해주면 돼.
+팀장님, 회의에서 정해주신 B안으로 백엔드 적용이 아직 안 된 것 같아서 요청드립니다.
 
-[1] /dashboard/movies 응답에 latest_job_id 추가
-각 영화 객체(items[])에 latest_job_id — 그 영화의 가장 최근 완료된 분석 job_id — 를 넣어줄 수 있을까?
-왜 필요하냐: 프론트에서 영화 카드 누르면 /jobs/{job_id}/result 로 가야 하는데, 지금 movies 응답엔 job_id가 없어. 그래서 임시로 summary의 recent_jobs(최근 5개)에 있는 영화만 링크가 걸려. 나머지 카드는 전부 '결과 없음' 비활성이라, 영화 늘면 대부분 카드가 죽어.
-어떻게: summary의 recent_jobs에 이미 job_id-movie_id 연결이 있으니 movies 응답에도 같은 식으로 넣어주면 돼.
+[현재 확인한 상황]
+Swagger(127.0.0.1:8000/docs)에서 POST /collection/reviews/run-now를 펼쳐보니 request body가 아직 이렇게 돼 있습니다:
+{
+  "movie_id": "kobis_20252402",
+  "cgv_movie_code": "30001046",
+  "source": "cgv",
+  "depth": "preview",
+  "run_analysis": false
+}
 
-[2] /batch/jobs/{job_id}/final-result 응답에 poster_url 추가
-결과 페이지에서 영화 포스터를 띄우고 싶은데, final-result 응답엔 job_id, movie_id, movie_title, summary 네 개뿐이라 poster_url이 없어 (schemas.py FinalResultSchema). /dashboard/movies 에는 poster_url이 있으니, final-result 응답에도 poster_url 하나 넣어줄 수 있을까? movie_id는 이미 응답에 있으니 그걸로 movies 테이블의 poster_url 가져오면 될 것 같아.
+cgv_movie_code가 그대로 있어서, 팀장님이 말씀하신 B안(run-now가 movie_id만 받고 백엔드가 내부적으로 cgv_movie_code를 찾아서 처리)이 아직 적용안 된 것으로 보입니다.
 
-프론트는 둘 다 받으면 바로 쓰도록 돼 있어서, 백엔드에서 넣어주기만 하면 돼. 고마워!
+[부탁드릴 것]
+run-now의 request body에서 cgv_movie_code를 빼고, movie_id만 있어도 동작하도록 변경 부탁드립니다. depth·run_analysis는 그대로 유지하실 건지, source는 어떻게 할지도 같이 알려주시면 그에 맞춰 프론트 작업하겠습니다.
+
+[subscribe 동일 문제]
+POST /collection/subscribe 도 같은 cgv_movie_code를 받고 있어서, 같은 맥락이면 함께 수정 부탁드립니다.
+
+적용 완료되면 알려주세요! 그때 프론트 작업 들어가겠습니다.
