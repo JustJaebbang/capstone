@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from app.schemas import MovieSchema, ReviewTrafficResponse
-from app.services.movie_service import get_movies, get_review_traffic
+from app.schemas import MovieSchema, MovieSearchResponse, ReviewTrafficResponse
+from app.services.movie_service import get_movies, get_review_traffic, search_movies
 
 router = APIRouter(prefix="/movies", tags=["movies"])
 
@@ -9,6 +9,12 @@ router = APIRouter(prefix="/movies", tags=["movies"])
 @router.get("", response_model=list[MovieSchema])
 def read_movies():
     return get_movies()
+
+
+@router.get("/search", response_model=MovieSearchResponse)
+def search_movies_endpoint(q: str = "", limit: int = 20):
+    """제목 검색(대소문자·공백 무시 부분일치). 빈 q는 빈 결과."""
+    return search_movies(q, limit=limit)
 
 
 @router.get("/{movie_id}/review-traffic", response_model=ReviewTrafficResponse)

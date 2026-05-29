@@ -149,6 +149,25 @@ class ReviewTrafficResponse(BaseModel):
     )
 
 
+class MovieSearchItem(BaseModel):
+    movie_id: str = Field(..., examples=["kobis_20259773"])
+    movie_title: str = Field(..., examples=["슈퍼 마리오 갤럭시"])
+    poster_url: Optional[str] = Field(default=None)
+    release_year: Optional[int] = Field(default=None, examples=[2026])
+    genre: Optional[str] = Field(default=None, examples=["애니메이션"])
+    source: Optional[str] = Field(default=None, examples=["kobis"])
+
+
+class MovieSearchResponse(BaseModel):
+    query: str = Field(..., examples=["마리오"])
+    total_count: int = Field(
+        ...,
+        description="매칭된 총 영화 수 (limit 적용 전).",
+        examples=[1],
+    )
+    items: List[MovieSearchItem] = Field(default_factory=list)
+
+
 class BatchJobSchema(BaseModel):
     job_id: str = Field(..., examples=["job_001"])
     movie_id: str = Field(..., examples=["mv_001"])
