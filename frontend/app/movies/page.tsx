@@ -2,6 +2,7 @@ import { fetchDashboardData } from "@/lib/dashboard";
 
 import WatchaFontStyles from "@/components/style-experiments/watcha/WatchaFontStyles";
 import WatchaNav from "@/components/style-experiments/watcha/WatchaNav";
+import WatchaTicker from "@/components/style-experiments/watcha/WatchaTicker";
 import WatchaFooter from "@/components/style-experiments/watcha/WatchaFooter";
 import WatchaMovieRow from "@/components/style-experiments/watcha/WatchaMovieRow";
 
@@ -52,12 +53,22 @@ export default async function MoviesPage() {
 
   const { movies, summary } = data;
 
+  const recent = summary.recent_activities[0];
+  const recentJobId = recent
+    ? movies.find((m) => m.movie_id === recent.movie_id)?.latest_job_id ?? null
+    : null;
+  const recentHref = recentJobId ? `/jobs/${recentJobId}/result` : null;
+
   return (
     <main className="flex min-h-screen flex-col bg-[#fbf9f3] text-[#161616] antialiased selection:bg-[#ff2c63]/85 selection:text-white">
       <WatchaFontStyles />
 
       <div className="watcha-page flex flex-1 flex-col">
         <WatchaNav updatedAt={summary.updated_at} />
+
+        {recent && (
+          <WatchaTicker movieTitle={recent.movie_title} href={recentHref} />
+        )}
 
         <section className="flex-1 border-b border-[#e8e3d6]">
           <div className="mx-auto max-w-[1240px] px-8 py-16 lg:py-20">
