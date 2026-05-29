@@ -69,14 +69,6 @@ export default async function MoviesPage() {
                 이번 회차의{" "}
                 <span className="italic text-[#ff2c63]">영화들</span>
               </h2>
-              <p className="mt-4 max-w-[560px] text-[15px] leading-[1.7] text-[#3d3a35]">
-                카드를 누르면 미리 분석된 결과 페이지로 바로 이동합니다.
-                숫자는 평점이 아닌{" "}
-                <em className="not-italic font-medium text-[#161616]">
-                  호감 비율
-                </em>
-                입니다.
-              </p>
             </div>
 
             {movies.length === 0 ? (
