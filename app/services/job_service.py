@@ -217,7 +217,7 @@ def run_llm_for_job(
 
 def run_cluster_for_job(
     job,
-    cluster_mode: str = "hdbscan",
+    cluster_mode: str = "phrase_llm",
 ) -> dict:
     cluster_request = build_cluster_request_for_job(job)
 
@@ -345,7 +345,7 @@ def run_full_pipeline(
     movie_id: str,
     target_date: Optional[date] = None,
     llm_mode: str = "openai",
-    cluster_mode: str = "hdbscan",
+    cluster_mode: str = "phrase_llm",
     review_limit: int = 1000,
 ) -> BatchJobSchema:
     """One-shot pipeline: create batch_job -> LLM -> cluster -> final.

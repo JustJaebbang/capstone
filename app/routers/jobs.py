@@ -45,7 +45,7 @@ def read_job_status(job_id: str):
 @router.post("/{job_id}/run-llm")
 def run_batch_job(
     job_id: str,
-    review_limit: int = 3000,
+    review_limit: int = 10000,
     llm_mode: str = "openai",
 ):
     """
@@ -90,7 +90,7 @@ def get_llm_result(job_id: str):
 @router.post("/{job_id}/run-cluster")
 def run_cluster_job(
     job_id: str,
-    cluster_mode: str = "hdbscan",
+    cluster_mode: str = "phrase_llm",
 ):
     job = get_job(job_id)
     if job is None:
