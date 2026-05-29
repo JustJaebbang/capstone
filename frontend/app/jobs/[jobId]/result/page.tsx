@@ -46,6 +46,7 @@ type ApiOpinionGroup = {
   cluster_id: string | number;
   label: string;
   count: number;
+  sentiment?: "positive" | "negative";
 };
 
 type OpinionGroupsResponse =
@@ -60,6 +61,7 @@ type ViewOpinionGroup = {
   cluster_id: string;
   label: string;
   count: number;
+  sentiment?: "positive" | "negative";
 };
 
 function normalizeOpinionGroups(
@@ -74,6 +76,7 @@ function normalizeOpinionGroups(
       cluster_id: String(group.cluster_id),
       label: group.label,
       count: group.count,
+      sentiment: group.sentiment,
     }))
     .sort((a, b) => b.count - a.count);
 }
