@@ -218,11 +218,16 @@ def run_llm_for_job(
 def run_cluster_for_job(
     job,
     cluster_mode: str = "phrase_llm",
+    reclassify_etc: bool = False,
 ) -> dict:
     cluster_request = build_cluster_request_for_job(job)
 
     cluster_response = run_cluster_module(cluster_request, mode=cluster_mode)
-    cluster_response = reclassify_etc_clusters(cluster_response)
+    # phrase_llm은 phrase별로 이미 17-set 분류를 끝내므로 기본적으로 2차
+    # "기타" 재분류를 돌리지 않는다(중복 토픽 생성·억지 분류 방지). 자유토픽
+    # 모드(hdbscan/kmeans)에서 의미가 있으니 reclassify_etc=True로 켤 수 있다.
+    if reclassify_etc:
+        cluster_response = reclassify_etc_clusters(cluster_response)
     cluster_result = cluster_response.model_dump(mode="json")
 
     save_opinion_groups_to_db(
@@ -346,6 +351,7 @@ def run_full_pipeline(
     target_date: Optional[date] = None,
     llm_mode: str = "openai",
     cluster_mode: str = "phrase_llm",
+    reclassify_etc: bool = False,
     review_limit: int = 1000,
 ) -> BatchJobSchema:
     """One-shot pipeline: create batch_job -> LLM -> cluster -> final.
@@ -382,7 +388,7 @@ def run_full_pipeline(
         run_llm_for_job(job, review_limit=review_limit, llm_mode=llm_mode)
 
         update_job_status(job.job_id, "clustering")
-        run_cluster_for_job(job, cluster_mode=cluster_mode)
+        run_cluster_for_job(job, cluster_mode=cluster_mode, reclassify_etc=reclassify_etc)
 
         update_job_status(job.job_id, "saving_results")
         run_final_for_job(job)

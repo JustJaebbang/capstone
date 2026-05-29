@@ -91,6 +91,7 @@ def get_llm_result(job_id: str):
 def run_cluster_job(
     job_id: str,
     cluster_mode: str = "phrase_llm",
+    reclassify_etc: bool = False,
 ):
     job = get_job(job_id)
     if job is None:
@@ -100,6 +101,7 @@ def run_cluster_job(
         result = run_cluster_for_job(
             job=job,
             cluster_mode=cluster_mode,
+            reclassify_etc=reclassify_etc,
         )
         return result
 
