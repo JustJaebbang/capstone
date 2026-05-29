@@ -26,21 +26,6 @@ export default function WatchaNav({ updatedAt }: Props) {
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-9 md:flex">
-          <span className="text-[13.5px] font-medium tracking-tight text-[#161616]">
-            영화
-          </span>
-          <span className="text-[13.5px] tracking-tight text-[#6b6760] hover:text-[#161616]">
-            키워드
-          </span>
-          <span className="text-[13.5px] tracking-tight text-[#6b6760] hover:text-[#161616]">
-            분석 노트
-          </span>
-          <span className="text-[13.5px] tracking-tight text-[#6b6760] hover:text-[#161616]">
-            아카이브
-          </span>
-        </nav>
-
         <div className="flex items-center gap-3">
           <span className="hidden font-mono text-[11px] uppercase tracking-[0.16em] text-[#9a958b] md:inline">
             batch · {stamp}
