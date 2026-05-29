@@ -45,12 +45,6 @@ export default function WatchaNav({ updatedAt }: Props) {
           <span className="hidden font-mono text-[11px] uppercase tracking-[0.16em] text-[#9a958b] md:inline">
             batch · {stamp}
           </span>
-          <Link
-            href="/movies"
-            className="rounded-full bg-[#161616] px-4 py-2 text-[12.5px] font-medium tracking-tight text-[#fbf9f3] transition-colors hover:bg-[#ff2c63]"
-          >
-            대시보드 열기
-          </Link>
         </div>
       </div>
     </header>
