@@ -78,6 +78,13 @@ function normalizeOpinionGroups(
     .sort((a, b) => b.count - a.count);
 }
 
+function sentimentVerdict(positivePercent: number): string {
+  if (positivePercent >= 75) return "압도적 긍정";
+  if (positivePercent >= 55) return "긍정적";
+  if (positivePercent >= 35) return "부정적";
+  return "압도적 부정";
+}
+
 // Deterministic poster gradient — moody, film-still palette
 function posterGradient(seed: string): string {
   let h = 0;
@@ -212,28 +219,9 @@ export default async function ResultPage({ params }: ResultPageProps) {
                 <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#9a958b]">
                   Analysis · 분석 완료
                 </p>
-                <h1 className="mt-5 font-serif text-[58px] font-normal leading-[1.02] tracking-[-0.028em] text-[#161616] sm:text-[72px] lg:text-[84px]">
-                  관객은 <span className="italic text-[#ff2c63]">
-                    {sentimentRatio.positive_percent >= sentimentRatio.negative_percent ? "호감" : "불호"}
-                  </span>으로
-                  <br />
-                  답했습니다.
+                <h1 className="mt-5 font-serif text-[58px] font-normal italic leading-[1.02] tracking-[-0.028em] text-[#ff2c63] sm:text-[72px] lg:text-[84px]">
+                  {sentimentVerdict(sentimentRatio.positive_percent)}
                 </h1>
-                <p className="mt-6 max-w-[480px] text-[16px] leading-[1.75] text-[#3d3a35]">
-                  {totalReviewCount !== null && (
-                    <>총 {totalReviewCount.toLocaleString()}건의 리뷰가 </>
-                  )}
-                  {opinionGroups.length}개 의견 군집으로 묶였습니다.
-                  {topGroup && (
-                    <>
-                      {" "}가장 큰 목소리는{" "}
-                      <em className="not-italic font-medium text-[#161616]">
-                        &ldquo;{topGroup.label}&rdquo;
-                      </em>
-                      였습니다.
-                    </>
-                  )}
-                </p>
 
                 <div className="mt-10 flex items-center gap-10">
                   <WatchaSentimentRing
