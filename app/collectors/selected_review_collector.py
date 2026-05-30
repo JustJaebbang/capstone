@@ -413,7 +413,9 @@ class CGVReviewCollector(BaseCollector[CollectedReview]):
                 continue
             if rview_no:
                 seen_review_ids.add(rview_no)
-            text = (raw.get("rviewCont") or "").strip()
+            # PostgreSQL text 컬럼은 NUL(0x00) 바이트를 저장할 수 없다.
+            # CGV 본문/닉네임에 간혹 섞여 들어와 INSERT 전체가 실패하므로 제거.
+            text = (raw.get("rviewCont") or "").replace("\x00", "").strip()
             if not text:
                 continue
             collected.append(
@@ -421,7 +423,7 @@ class CGVReviewCollector(BaseCollector[CollectedReview]):
                     source=SOURCE,
                     movie_id=movie_id,
                     external_review_id=rview_no,
-                    author=raw.get("snsNcnm"),
+                    author=((raw.get("snsNcnm") or "").replace("\x00", "") or None),
                     rating=_parse_rating(raw.get("egScore")),
                     text=text,
                     written_at=_parse_written_at(raw.get("creDt")),
