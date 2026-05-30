@@ -26,6 +26,7 @@ from app.services.result_service import (
     save_opinion_groups_to_db,
     save_review_cluster_map_to_db,
     save_movie_summary_to_db,
+    update_opinion_group_labels_to_db,
     get_llm_result_by_job_id,
     get_cluster_result_by_job_id,
     get_opinion_group_list_from_db,
@@ -291,6 +292,15 @@ def run_final_for_job(job) -> dict:
         movie_id=job.movie_id,
         sentiment_ratio=final_result["summary"]["sentiment_ratio"],
     )
+
+    # build_final_result가 만든 top_opinions LLM 라벨을 opinion_groups.label에 반영.
+    # top_opinions는 cluster_result["clusters"][:3]와 동일 순서이므로 인덱스로 매핑.
+    top_clusters = cluster_result["clusters"][:len(final_result["summary"]["top_opinions"])]
+    label_by_cluster_id = {
+        cluster["cluster_id"]: opinion["label"]
+        for cluster, opinion in zip(top_clusters, final_result["summary"]["top_opinions"])
+    }
+    update_opinion_group_labels_to_db(job.job_id, label_by_cluster_id)
 
     return final_result
 

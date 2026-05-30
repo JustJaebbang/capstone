@@ -314,6 +314,35 @@ def save_movie_summary_to_db(movie_id: str, sentiment_ratio: dict) -> None:
         db.close()
 
 
+def update_opinion_group_labels_to_db(
+    job_id: str, label_by_cluster_id: dict
+) -> None:
+    """build-final에서 생성한 top_opinions LLM 라벨을 opinion_groups.label에 반영.
+    조회 경로(_get_final_result_dict_from_db)가 이 라벨을 그대로 읽는다.
+    """
+    if not label_by_cluster_id:
+        return
+
+    db = SessionLocal()
+    try:
+        groups = (
+            db.query(OpinionGroup)
+            .filter(OpinionGroup.job_id == job_id)
+            .filter(OpinionGroup.cluster_id.in_(label_by_cluster_id.keys()))
+            .all()
+        )
+        for g in groups:
+            new_label = label_by_cluster_id.get(g.cluster_id)
+            if new_label:
+                g.label = new_label
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def _get_final_result_dict_from_db(job_id: str) -> Optional[dict]:
     cluster_dict = _get_cluster_result_dict_from_db(job_id)
     if cluster_dict is None:
@@ -328,14 +357,22 @@ def _get_final_result_dict_from_db(job_id: str) -> Optional[dict]:
         calculate_sentiment_ratio,
     )
 
+    # build-final이 opinion_groups.label에 저장해 둔 LLM 구어체 라벨을 그대로 사용.
+    # 저장 라벨이 없으면(=build-final 미실행) make_label로 폴백.
+    group_list = get_opinion_group_list_from_db(job_id) or []
+    label_by_cluster_id = {g["cluster_id"]: g["label"] for g in group_list}
+
     top_opinions = []
     for idx, cluster in enumerate(cluster_dict["clusters"][:TOP_OPINIONS_LIMIT], start=1):
+        label = label_by_cluster_id.get(cluster["cluster_id"]) or make_label(
+            cluster["topic"], cluster["sentiment"]
+        )
         top_opinions.append(
             {
                 "rank": idx,
                 "topic": cluster["topic"],
                 "sentiment": cluster["sentiment"],
-                "label": make_label(cluster["topic"], cluster["sentiment"]),
+                "label": label,
                 "count": cluster["count"],
             }
         )
