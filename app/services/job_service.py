@@ -39,6 +39,11 @@ from app.services.final_service import (
     collect_reviews_for_cluster,
 )
 
+# 분석 파이프라인이 영화당 처리하는 리뷰 상한. 수집된 리뷰를 사실상 전량
+# 처리하도록 충분히 크게 둔다(배치 처리량 KPI). fetch_reviews는 이 값으로
+# query.limit을 걸므로, 이보다 리뷰가 적으면 전량, 많으면 이 수만큼만 처리.
+PIPELINE_REVIEW_LIMIT = 100_000
+
 
 def _batchjob_to_schema(row: BatchJob) -> BatchJobSchema:
     return BatchJobSchema(
@@ -251,7 +256,7 @@ def run_final_for_job(job) -> dict:
 
     source_reviews = fetch_reviews(
         movie_id=job.movie_id,
-        review_limit=1000,
+        review_limit=PIPELINE_REVIEW_LIMIT,
     )
 
     source_reviews_data = [
@@ -362,7 +367,7 @@ def run_full_pipeline(
     llm_mode: str = "openai",
     cluster_mode: str = "phrase_llm",
     reclassify_etc: bool = False,
-    review_limit: int = 1000,
+    review_limit: int = PIPELINE_REVIEW_LIMIT,
 ) -> BatchJobSchema:
     """One-shot pipeline: create batch_job -> LLM -> cluster -> final.
 
