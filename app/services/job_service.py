@@ -26,6 +26,7 @@ from app.services.result_service import (
     save_opinion_groups_to_db,
     save_review_cluster_map_to_db,
     save_movie_summary_to_db,
+    update_opinion_group_labels_to_db,
     get_llm_result_by_job_id,
     get_cluster_result_by_job_id,
     get_opinion_group_list_from_db,
@@ -218,11 +219,16 @@ def run_llm_for_job(
 def run_cluster_for_job(
     job,
     cluster_mode: str = "phrase_llm",
+    reclassify_etc: bool = False,
 ) -> dict:
     cluster_request = build_cluster_request_for_job(job)
 
     cluster_response = run_cluster_module(cluster_request, mode=cluster_mode)
-    cluster_response = reclassify_etc_clusters(cluster_response)
+    # phrase_llm은 phrase별로 이미 17-set 분류를 끝내므로 기본적으로 2차
+    # "기타" 재분류를 돌리지 않는다(중복 토픽 생성·억지 분류 방지). 자유토픽
+    # 모드(hdbscan/kmeans)에서 의미가 있으니 reclassify_etc=True로 켤 수 있다.
+    if reclassify_etc:
+        cluster_response = reclassify_etc_clusters(cluster_response)
     cluster_result = cluster_response.model_dump(mode="json")
 
     save_opinion_groups_to_db(
@@ -287,6 +293,15 @@ def run_final_for_job(job) -> dict:
         sentiment_ratio=final_result["summary"]["sentiment_ratio"],
     )
 
+    # build_final_result가 만든 top_opinions LLM 라벨을 opinion_groups.label에 반영.
+    # top_opinions는 cluster_result["clusters"][:3]와 동일 순서이므로 인덱스로 매핑.
+    top_clusters = cluster_result["clusters"][:len(final_result["summary"]["top_opinions"])]
+    label_by_cluster_id = {
+        cluster["cluster_id"]: opinion["label"]
+        for cluster, opinion in zip(top_clusters, final_result["summary"]["top_opinions"])
+    }
+    update_opinion_group_labels_to_db(job.job_id, label_by_cluster_id)
+
     return final_result
 
 
@@ -346,6 +361,7 @@ def run_full_pipeline(
     target_date: Optional[date] = None,
     llm_mode: str = "openai",
     cluster_mode: str = "phrase_llm",
+    reclassify_etc: bool = False,
     review_limit: int = 1000,
 ) -> BatchJobSchema:
     """One-shot pipeline: create batch_job -> LLM -> cluster -> final.
@@ -382,7 +398,7 @@ def run_full_pipeline(
         run_llm_for_job(job, review_limit=review_limit, llm_mode=llm_mode)
 
         update_job_status(job.job_id, "clustering")
-        run_cluster_for_job(job, cluster_mode=cluster_mode)
+        run_cluster_for_job(job, cluster_mode=cluster_mode, reclassify_etc=reclassify_etc)
 
         update_job_status(job.job_id, "saving_results")
         run_final_for_job(job)

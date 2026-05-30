@@ -32,7 +32,7 @@ from app.schemas import (  # noqa: E402
 
 client = TestClient(app)
 
-EXISTING_JOB = "job_002"
+EXISTING_JOB = "job_058"
 EXISTING_CLUSTER = "cl_001"
 MISSING_JOB = "does_not_exist"
 MISSING_CLUSTER = "cl_999"
