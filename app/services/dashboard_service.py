@@ -78,7 +78,13 @@ def get_dashboard_movies() -> dict:
             summary: Optional[MovieSummary] = summaries.get(movie.movie_id)
             job_id = latest_job_by_movie.get(movie.movie_id)
 
-            top_keywords = _top_keywords_for_job(db, job_id) if job_id else []
+            # 분석 완료된(=completed job이 있는) 영화만 목록에 노출한다.
+            # CGV 매핑이 안 되거나 리뷰가 없어 분석까지 가지 못한 영화는
+            # completed job이 없으므로 자연히 제외된다.
+            if job_id is None:
+                continue
+
+            top_keywords = _top_keywords_for_job(db, job_id)
 
             items.append(
                 {
