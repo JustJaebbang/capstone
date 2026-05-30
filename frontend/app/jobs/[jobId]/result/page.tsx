@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import SentimentRatio from "@/components/SentimentRatio";
+import ReviewTrafficChart from "@/components/ReviewTrafficChart";
 import ElementScoreChart from "@/components/ElementScoreChart";
 import ResultReviewSection from "@/components/ResultReviewSection";
 import WatchaFontStyles from "@/components/style-experiments/watcha/WatchaFontStyles";
@@ -311,7 +311,7 @@ export default async function ResultPage({ params }: ResultPageProps) {
                   Editor&apos;s note · 01
                 </p>
                 <h2 className="mt-4 font-serif text-[36px] leading-[1.1] tracking-[-0.02em] text-[#161616] sm:text-[44px]">
-                  감성 비율과 <span className="italic">요소별 점수</span>
+                  리뷰 트래픽과 <span className="italic">요소별 점수</span>
                 </h2>
               </div>
               <p className="max-w-[420px] text-[14px] leading-[1.7] text-[#3d3a35] md:text-right">
@@ -321,10 +321,7 @@ export default async function ResultPage({ params }: ResultPageProps) {
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <SentimentRatio
-                positivePercent={sentimentRatio.positive_percent}
-                negativePercent={sentimentRatio.negative_percent}
-              />
+              <ReviewTrafficChart movieId={finalResult.movie_id ?? ""} />
               <ElementScoreChart
                 scores={finalResult.summary.element_scores ?? []}
                 totalReviewCount={totalReviewCount}
