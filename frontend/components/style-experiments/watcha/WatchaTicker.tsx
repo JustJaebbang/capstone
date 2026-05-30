@@ -13,7 +13,7 @@ export default function WatchaTicker({ movieTitle, href }: Props) {
       {Array.from({ length: REPEAT }).map((_, i) => (
         <span
           key={`${groupKey}-${i}`}
-          className="px-10 font-mono text-[11px] uppercase tracking-[0.18em] text-[#6b6760]"
+          className="px-12 font-mono text-[14px] uppercase tracking-[0.18em] text-[#6b6760]"
         >
           최근 분석된 영화는{" "}
           <em className="not-italic font-medium text-[#ff2c63]">{movieTitle}</em>{" "}
@@ -24,7 +24,7 @@ export default function WatchaTicker({ movieTitle, href }: Props) {
   );
 
   const strip = (
-    <div className="watcha-ticker overflow-hidden border-y border-[#e8e3d6] bg-[#fbf9f3] py-2">
+    <div className="watcha-ticker overflow-hidden border-y border-[#e8e3d6] bg-[#fbf9f3] py-3">
       <div className="watcha-ticker-track flex w-max whitespace-nowrap">
         {renderGroup("a", false)}
         {renderGroup("b", true)}
@@ -35,7 +35,7 @@ export default function WatchaTicker({ movieTitle, href }: Props) {
           to { transform: translateX(-50%); }
         }
         .watcha-ticker-track {
-          animation: watcha-ticker 22s linear infinite;
+          animation: watcha-ticker 28s linear infinite;
           will-change: transform;
         }
         .watcha-ticker:hover .watcha-ticker-track {
