@@ -338,11 +338,11 @@ export default async function ResultPage({ params }: ResultPageProps) {
                 Notebook · 02
               </p>
               <h2 className="font-serif text-[36px] leading-[1.05] tracking-[-0.02em] text-[#161616] sm:text-[44px]">
-                관객 <span className="italic text-[#ff2c63]">의견 군집</span>
+                관객 <span className="italic text-[#ff2c63]">의견 그룹</span>
               </h2>
               <p className="mt-2 max-w-[560px] text-[15px] leading-[1.7] text-[#3d3a35]">
-                가장 자주 등장한 의견 TOP 3와, 그 뒤를 잇는 군집들입니다.
-                카드를 누르면 해당 군집에 묶인 실제 리뷰가 펼쳐집니다.
+                가장 많이 나온 의견 TOP 3와, 그 뒤를 잇는 그룹들입니다.
+                카드를 누르면 해당 그룹의 실제 리뷰가 펼쳐집니다.
               </p>
             </div>
 
