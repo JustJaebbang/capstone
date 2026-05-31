@@ -1,85 +1,409 @@
-import json
-from pathlib import Path
+from collections import defaultdict
 from typing import List, Optional
 
-from app.schemas import FinalResultSchema
+from sqlalchemy import func
 
-LLM_RESULTS_PATH = Path("data/llm_results.json")
-CLUSTER_RESULTS_PATH = Path("data/cluster_results.json")
-FINAL_RESULTS_PATH = Path("data/final_results.json")
+from app.db.models.batch_job import BatchJob
+from app.db.models.llm_phrase import LLMPhrase
+from app.db.models.movie import Movie
+from app.db.models.movie_summary import MovieSummary
+from app.db.models.opinion_group import OpinionGroup
+from app.db.models.review import Review
+from app.db.models.review_cluster_map import ReviewClusterMap
+from app.db.session import SessionLocal
+from app.services.labels import make_label
 
-
-def _read_json_array(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _write_json_array(path: Path, data: list[dict]) -> None:
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+TOP_OPINIONS_LIMIT = 3
 
 
-def save_llm_result(job_id: str, movie_id: str, result_data: dict) -> None:
-    data = _read_json_array(LLM_RESULTS_PATH)
+def _get_llm_result_dict_from_db(job_id: str) -> Optional[dict]:
+    db = SessionLocal()
+    try:
+        job = db.query(BatchJob).filter(BatchJob.job_id == job_id).one_or_none()
+        if job is None:
+            return None
 
-    # 같은 job_id 결과가 있으면 덮어쓰기
-    data = [item for item in data if item.get("job_id") != job_id]
+        phrases = (
+            db.query(LLMPhrase)
+            .filter(LLMPhrase.job_id == job_id)
+            .order_by(LLMPhrase.review_id, LLMPhrase.phrase_id)
+            .all()
+        )
+        if not phrases:
+            return None
 
-    data.append(
-        {
-            "job_id": job_id,
-            "movie_id": movie_id,
-            "result": result_data,
+        grouped = defaultdict(list)
+        for p in phrases:
+            grouped[p.review_id].append({"text": p.text, "sentiment": p.sentiment})
+
+        results = [
+            {"review_id": review_id, "phrases": ph_list}
+            for review_id, ph_list in grouped.items()
+        ]
+
+        return {
+            "job_id": job.job_id,
+            "movie_id": job.movie_id,
+            "movie_title": job.movie_title,
+            "results": results,
         }
-    )
-    _write_json_array(LLM_RESULTS_PATH, data)
+    finally:
+        db.close()
 
 
 def get_llm_result_by_job_id(job_id: str) -> Optional[dict]:
-    data = _read_json_array(LLM_RESULTS_PATH)
-
-    for item in data:
-        if item.get("job_id") == job_id:
-            return item
-
-    return None
+    return _get_llm_result_dict_from_db(job_id)
 
 
-def save_cluster_result(job_id: str, movie_id: str, result_data: dict) -> None:
-    data = _read_json_array(CLUSTER_RESULTS_PATH)
+def save_llm_phrases_to_db(job_id: str, movie_id: str, result_data: dict) -> None:
+    rows = []
+    for item in result_data["results"]:
+        review_id = item["review_id"]
+        for phrase in item["phrases"]:
+            rows.append(
+                {
+                    "job_id": job_id,
+                    "review_id": review_id,
+                    "movie_id": movie_id,
+                    "text": phrase["text"],
+                    "sentiment": phrase["sentiment"],
+                }
+            )
 
-    data = [item for item in data if item.get("job_id") != job_id]
+    db = SessionLocal()
+    try:
+        db.query(LLMPhrase).filter(LLMPhrase.job_id == job_id).delete(
+            synchronize_session=False
+        )
+        if rows:
+            db.bulk_insert_mappings(LLMPhrase, rows)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
-    data.append(
-        {
-            "job_id": job_id,
-            "movie_id": movie_id,
-            "result": result_data,
+
+def get_llm_phrases_by_job_id(job_id: str) -> List[LLMPhrase]:
+    db = SessionLocal()
+    try:
+        return (
+            db.query(LLMPhrase)
+            .filter(LLMPhrase.job_id == job_id)
+            .order_by(LLMPhrase.review_id, LLMPhrase.phrase_id)
+            .all()
+        )
+    finally:
+        db.close()
+
+
+def _get_cluster_result_dict_from_db(job_id: str) -> Optional[dict]:
+    db = SessionLocal()
+    try:
+        job = db.query(BatchJob).filter(BatchJob.job_id == job_id).one_or_none()
+        if job is None:
+            return None
+
+        groups = (
+            db.query(OpinionGroup)
+            .filter(OpinionGroup.job_id == job_id)
+            .order_by(OpinionGroup.count.desc(), OpinionGroup.cluster_id)
+            .all()
+        )
+        if not groups:
+            return None
+
+        clusters = [
+            {
+                "cluster_id": g.cluster_id,
+                "topic": g.topic,
+                "sentiment": g.sentiment,
+                "count": g.count,
+                "review_count": g.review_count,
+                "phrases": g.phrases,
+            }
+            for g in groups
+        ]
+
+        return {
+            "job_id": job.job_id,
+            "movie_id": job.movie_id,
+            "movie_title": job.movie_title,
+            "clusters": clusters,
         }
+    finally:
+        db.close()
+
+
+def get_cluster_result_by_job_id(job_id: str):
+    return _get_cluster_result_dict_from_db(job_id)
+
+
+def save_opinion_groups_to_db(job_id: str, movie_id: str, cluster_result: dict) -> None:
+    rows = []
+    for cluster in cluster_result["clusters"]:
+        topic = cluster["topic"]
+        sentiment = cluster["sentiment"]
+        rows.append(
+            {
+                "job_id": job_id,
+                "cluster_id": cluster["cluster_id"],
+                "movie_id": movie_id,
+                "topic": topic,
+                "sentiment": sentiment,
+                "label": make_label(topic, sentiment),
+                "count": cluster["count"],
+                "review_count": cluster["review_count"],
+                "phrases": cluster["phrases"],
+            }
+        )
+
+    db = SessionLocal()
+    try:
+        db.query(ReviewClusterMap).filter(ReviewClusterMap.job_id == job_id).delete(
+            synchronize_session=False
+        )
+        db.query(OpinionGroup).filter(OpinionGroup.job_id == job_id).delete(
+            synchronize_session=False
+        )
+        if rows:
+            db.bulk_insert_mappings(OpinionGroup, rows)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def save_review_cluster_map_to_db(job_id: str, mapping: list[dict]) -> None:
+    db = SessionLocal()
+    try:
+        db.query(ReviewClusterMap).filter(ReviewClusterMap.job_id == job_id).delete(
+            synchronize_session=False
+        )
+        if mapping:
+            db.bulk_insert_mappings(ReviewClusterMap, mapping)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def get_opinion_group_list_from_db(job_id: str) -> Optional[List[dict]]:
+    db = SessionLocal()
+    try:
+        groups = (
+            db.query(OpinionGroup)
+            .filter(OpinionGroup.job_id == job_id)
+            .order_by(OpinionGroup.count.desc(), OpinionGroup.cluster_id)
+            .all()
+        )
+        if not groups:
+            return None
+
+        return [
+            {
+                "cluster_id": g.cluster_id,
+                "topic": g.topic,
+                "sentiment": g.sentiment,
+                "label": g.label,
+                "count": g.count,
+            }
+            for g in groups
+        ]
+    finally:
+        db.close()
+
+
+def get_opinion_group_meta_from_db(
+    job_id: str, cluster_id: str
+) -> Optional[dict]:
+    db = SessionLocal()
+    try:
+        g = (
+            db.query(OpinionGroup)
+            .filter(OpinionGroup.job_id == job_id)
+            .filter(OpinionGroup.cluster_id == cluster_id)
+            .one_or_none()
+        )
+        if g is None:
+            return None
+        return {
+            "cluster_id": g.cluster_id,
+            "topic": g.topic,
+            "sentiment": g.sentiment,
+            "label": g.label,
+            "count": g.count,
+            "review_count": g.review_count,
+        }
+    finally:
+        db.close()
+
+
+def get_paginated_reviews_for_cluster_from_db(
+    job_id: str,
+    cluster_id: str,
+    page: int,
+    page_size: int,
+) -> tuple[Optional[List[dict]], int]:
+    db = SessionLocal()
+    try:
+        total_count = (
+            db.query(func.count())
+            .select_from(ReviewClusterMap)
+            .filter(ReviewClusterMap.job_id == job_id)
+            .filter(ReviewClusterMap.cluster_id == cluster_id)
+            .scalar()
+        )
+
+        if total_count == 0:
+            return None, 0
+
+        offset = (page - 1) * page_size
+        rows = (
+            db.query(Review.review_id, Review.text)
+            .join(ReviewClusterMap, ReviewClusterMap.review_id == Review.review_id)
+            .filter(ReviewClusterMap.job_id == job_id)
+            .filter(ReviewClusterMap.cluster_id == cluster_id)
+            .order_by(Review.review_id)
+            .offset(offset)
+            .limit(page_size)
+            .all()
+        )
+
+        reviews = [{"review_id": r.review_id, "text": r.text} for r in rows]
+        return reviews, total_count
+    finally:
+        db.close()
+
+
+def save_movie_summary_to_db(movie_id: str, sentiment_ratio: dict) -> None:
+    db = SessionLocal()
+    try:
+        existing = (
+            db.query(MovieSummary).filter(MovieSummary.movie_id == movie_id).one_or_none()
+        )
+        if existing is None:
+            db.add(
+                MovieSummary(
+                    movie_id=movie_id,
+                    positive_percent=sentiment_ratio["positive_percent"],
+                    negative_percent=sentiment_ratio["negative_percent"],
+                    positive_review_count=sentiment_ratio["positive_review_count"],
+                    negative_review_count=sentiment_ratio["negative_review_count"],
+                    tie_review_count=sentiment_ratio["tie_review_count"],
+                    total_review_count=sentiment_ratio["total_review_count"],
+                )
+            )
+        else:
+            existing.positive_percent = sentiment_ratio["positive_percent"]
+            existing.negative_percent = sentiment_ratio["negative_percent"]
+            existing.positive_review_count = sentiment_ratio["positive_review_count"]
+            existing.negative_review_count = sentiment_ratio["negative_review_count"]
+            existing.tie_review_count = sentiment_ratio["tie_review_count"]
+            existing.total_review_count = sentiment_ratio["total_review_count"]
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def update_opinion_group_labels_to_db(
+    job_id: str, label_by_cluster_id: dict
+) -> None:
+    """build-final에서 생성한 top_opinions LLM 라벨을 opinion_groups.label에 반영.
+    조회 경로(_get_final_result_dict_from_db)가 이 라벨을 그대로 읽는다.
+    """
+    if not label_by_cluster_id:
+        return
+
+    db = SessionLocal()
+    try:
+        groups = (
+            db.query(OpinionGroup)
+            .filter(OpinionGroup.job_id == job_id)
+            .filter(OpinionGroup.cluster_id.in_(label_by_cluster_id.keys()))
+            .all()
+        )
+        for g in groups:
+            new_label = label_by_cluster_id.get(g.cluster_id)
+            if new_label:
+                g.label = new_label
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def _get_final_result_dict_from_db(job_id: str) -> Optional[dict]:
+    cluster_dict = _get_cluster_result_dict_from_db(job_id)
+    if cluster_dict is None:
+        return None
+
+    llm_dict = _get_llm_result_dict_from_db(job_id)
+    if llm_dict is None:
+        return None
+
+    from app.services.final_service import (
+        calculate_element_scores,
+        calculate_sentiment_ratio,
     )
-    _write_json_array(CLUSTER_RESULTS_PATH, data)
+
+    # build-final이 opinion_groups.label에 저장해 둔 LLM 구어체 라벨을 그대로 사용.
+    # 저장 라벨이 없으면(=build-final 미실행) make_label로 폴백.
+    group_list = get_opinion_group_list_from_db(job_id) or []
+    label_by_cluster_id = {g["cluster_id"]: g["label"] for g in group_list}
+
+    top_opinions = []
+    for idx, cluster in enumerate(cluster_dict["clusters"][:TOP_OPINIONS_LIMIT], start=1):
+        label = label_by_cluster_id.get(cluster["cluster_id"]) or make_label(
+            cluster["topic"], cluster["sentiment"]
+        )
+        top_opinions.append(
+            {
+                "rank": idx,
+                "topic": cluster["topic"],
+                "sentiment": cluster["sentiment"],
+                "label": label,
+                "count": cluster["count"],
+            }
+        )
+
+    sentiment_ratio = calculate_sentiment_ratio(llm_dict).model_dump(mode="json")
+    element_scores = [
+        item.model_dump(mode="json") for item in calculate_element_scores(llm_dict)
+    ]
+
+    db = SessionLocal()
+    try:
+        poster_url = (
+            db.query(Movie.poster_url)
+            .filter(Movie.movie_id == cluster_dict["movie_id"])
+            .scalar()
+        )
+    finally:
+        db.close()
+
+    return {
+        "job_id": cluster_dict["job_id"],
+        "movie_id": cluster_dict["movie_id"],
+        "movie_title": cluster_dict["movie_title"],
+        "poster_url": poster_url,
+        "summary": {
+            "top_opinions": top_opinions,
+            "sentiment_ratio": sentiment_ratio,
+            "element_scores": element_scores,
+        },
+    }
 
 
-def save_final_result(result: FinalResultSchema) -> None:
-    data = _read_json_array(FINAL_RESULTS_PATH)
-
-    # 같은 movie_id 결과가 있으면 최신값으로 덮어쓰기
-    data = [item for item in data if item.get("movie_id") != result.movie_id]
-
-    data.append(result.model_dump(mode="json"))
-    _write_json_array(FINAL_RESULTS_PATH, data)
-
-
-def list_final_results() -> List[FinalResultSchema]:
-    data = _read_json_array(FINAL_RESULTS_PATH)
-    return [FinalResultSchema(**item) for item in data]
-
-
-def get_result_by_movie_id(movie_id: str) -> Optional[FinalResultSchema]:
-    for result in list_final_results():
-        if result.movie_id == movie_id:
-            return result
-    return None
+def get_final_result_by_job_id(job_id: str):
+    return _get_final_result_dict_from_db(job_id)
