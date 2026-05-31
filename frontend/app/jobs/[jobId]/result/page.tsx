@@ -235,7 +235,7 @@ export default async function ResultPage({ params }: ResultPageProps) {
                 <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#9a958b]">
                   Analysis · 분석 완료
                 </p>
-                <h1 className="mt-5 font-serif text-[58px] font-normal italic leading-[1.02] tracking-[-0.028em] text-[#ff2c63] sm:text-[72px] lg:text-[84px]">
+                <h1 className="mt-5 whitespace-nowrap font-serif text-[clamp(34px,8vw,84px)] font-normal italic leading-[1.02] tracking-[-0.028em] text-[#ff2c63]">
                   {sentimentVerdict(sentimentRatio.positive_percent, totalReviewCount)}
                 </h1>
 
