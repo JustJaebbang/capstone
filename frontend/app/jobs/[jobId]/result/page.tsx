@@ -81,11 +81,24 @@ function normalizeOpinionGroups(
     .sort((a, b) => b.count - a.count);
 }
 
-function sentimentVerdict(positivePercent: number): string {
-  if (positivePercent >= 75) return "압도적 긍정";
-  if (positivePercent >= 55) return "긍정적";
-  if (positivePercent >= 35) return "부정적";
-  return "압도적 부정";
+function sentimentVerdict(positivePercent: number, reviewCount: number | null): string {
+  const p = positivePercent;
+  const n = reviewCount;
+
+  // 양 끝 + 리뷰 수 보정 (기본 단계보다 우선, n 있을 때만)
+  if (n !== null) {
+    if (p >= 95 && n >= 500) return "압도적으로 긍정적"; // 강화
+    if (p < 20 && n >= 500) return "압도적으로 부정적"; // 강화
+    if (p >= 80 && n < 50) return "긍정적"; // 약화
+    if (p < 20 && n < 50) return "부정적"; // 약화
+  }
+
+  // 기본 5단계 (호감 % 기준)
+  if (p >= 80) return "매우 긍정적"; // 80~100
+  if (p >= 70) return "대체로 긍정적"; // 70~79
+  if (p >= 40) return "복합적"; // 40~69
+  if (p >= 20) return "대체로 부정적"; // 20~39
+  return "매우 부정적"; // 0~19
 }
 
 // Deterministic poster gradient — moody, film-still palette
@@ -223,7 +236,7 @@ export default async function ResultPage({ params }: ResultPageProps) {
                   Analysis · 분석 완료
                 </p>
                 <h1 className="mt-5 font-serif text-[58px] font-normal italic leading-[1.02] tracking-[-0.028em] text-[#ff2c63] sm:text-[72px] lg:text-[84px]">
-                  {sentimentVerdict(sentimentRatio.positive_percent)}
+                  {sentimentVerdict(sentimentRatio.positive_percent, totalReviewCount)}
                 </h1>
 
                 <div className="mt-10 flex items-center gap-10">
