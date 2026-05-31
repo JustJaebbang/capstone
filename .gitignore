@@ -64,3 +64,17 @@ build/
 # Jupyter (혹시 쓸 경우)
 # =========================
 .ipynb_checkpoints/
+
+# =========================
+# Collector debug dumps / scratch
+# =========================
+cgv_debug/
+cgv_raw.html
+cgv_headers.md
+cgvreview.md
+cgv_test.log
+
+# =========================
+# Local agent / IDE workspace
+# =========================
+.claude/

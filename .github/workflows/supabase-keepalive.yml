@@ -1,0 +1,35 @@
+name: Supabase Keepalive
+
+on:
+  schedule:
+    # Every 6 hours (4 pings/day, 28 pings before 7-day pause threshold).
+    # Buffer is intentional: GitHub Actions cron can be delayed minutes to hours
+    # under high load, and we never want to be one missed ping from a paused DB.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Install psql
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Ping Supabase with real query
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::SUPABASE_DATABASE_URL secret is not set"
+            exit 1
+          fi
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+            "SELECT NOW() AS pinged_at, current_database() AS db, version() AS pg_version;"
+          echo "Keepalive ping succeeded at $(date -u +%FT%TZ)"

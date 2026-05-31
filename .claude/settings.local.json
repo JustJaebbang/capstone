@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(uv run *)",
+      "Bash(ls \"C:\\\\Users\\\\jaebbang\\\\Documents\\\\project\\\\cluster\")",
+      "Bash(ls \"C:\\\\Users\\\\jaebbang\\\\Documents\\\\project\\\\cluster\\\\capstone\")",
+      "Bash(cmd *)"
+    ]
+  }
+}

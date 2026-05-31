@@ -1,0 +1,53 @@
+{
+  "items": [
+    {
+      "movie_id": "mv_001",
+      "movie_title": "파묘",
+      "source": "naver",
+      "is_active": true,
+      "release_year": 2024,
+      "notes": "시연용",
+      "poster_url": null,
+      "release_date": "2024-02-22",
+      "genres": ["미스터리", "스릴러"],
+      "latest_job_id": "job_021",
+      "job_status": "completed",
+      "job_completed_at": "2025-05-05T18:22:00+09:00",
+      "review_count": 1243,
+      "sentiment": {
+        "positive_percent": 72,
+        "negative_percent": 28
+      },
+      "top_keywords": [
+        { "rank": 1, "label": "연기",   "sentiment": "positive", "count": 328 },
+        { "rank": 2, "label": "스토리", "sentiment": "negative", "count": 276 },
+        { "rank": 3, "label": "영상미", "sentiment": "positive", "count": 198 }
+      ]
+    },
+    {
+      "movie_id": "mv_002",
+      "movie_title": "듄: 파트 2",
+      "source": "naver",
+      "is_active": true,
+      "release_year": 2019,
+      "notes": "테스트용",
+      "poster_url": null,
+      "release_date": "2024-02-28",
+      "genres": ["SF", "액션", "드라마"],
+      "latest_job_id": "job_017",
+      "job_status": "completed",
+      "job_completed_at": "2025-05-05T17:41:00+09:00",
+      "review_count": 1243,
+      "sentiment": {
+        "positive_percent": 64,
+        "negative_percent": 36
+      },
+      "top_keywords": [
+        { "rank": 1, "label": "연출",   "sentiment": "positive", "count": 312 },
+        { "rank": 2, "label": "스토리", "sentiment": "negative", "count": 265 },
+        { "rank": 3, "label": "영상미", "sentiment": "positive", "count": 221 }
+      ]
+    }
+  ],
+  "total": 2
+}

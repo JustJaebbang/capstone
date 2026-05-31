@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(frontend-design)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\kcwoo\\\\Documents\\\\cap\\\\capstone\\\\frontend\\\\components\\\\style-experiments\\\\brutalist\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\kcwoo\\\\Documents\\\\cap\\\\capstone\\\\frontend\\\\app\\\\style-experiments\\\\brutalist\")",
+      "Bash(npx tsc *)",
+      "Bash(npx next *)",
+      "Bash(npm run *)",
+      "Read(//c/Users/kcwoo/Documents/cap/awesome-design-md/design-md/spotify/**)",
+      "Read(//c/Users/kcwoo/Documents/cap/awesome-design-md/design-md/vercel/**)"
+    ]
+  }
+}

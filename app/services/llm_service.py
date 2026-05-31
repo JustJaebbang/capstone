@@ -1,16 +1,26 @@
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 
+from dotenv import load_dotenv
 from openai import OpenAI, APIError, OpenAIError
 
-from app.schemas import LLMRequestSchema, LLMResponseSchema
+from app.schemas import (
+    LLMRequestSchema,
+    LLMResponseSchema,
+    LLMResultItem,
+    PhraseSentimentItem,
+    ReviewItem,
+)
+
+# pydantic-settings는 .env의 database_url만 읽고 os.environ까지 전파하지 않으므로
+# OPENAI_API_KEY가 .env에만 있는 경우를 위해 모듈 로드 시 한 번 채워둔다.
+# 이미 환경에 설정돼 있다면 override=False로 그대로 둔다.
+load_dotenv(override=False)
 
 
-# ---------------------------
-# OpenAI client
-# ---------------------------
 def _get_openai_client() -> Optional[OpenAI]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -18,204 +28,367 @@ def _get_openai_client() -> Optional[OpenAI]:
     return OpenAI(api_key=api_key)
 
 
-# ---------------------------
-# Rule sets
-# ---------------------------
-POSITIVE_RULES = [
-    (["연기", "배우"], "연기 좋음"),
-    (["영상미", "화면", "촬영", "연출"], "영상미 좋음"),
-    (["몰입", "집중", "긴장감"], "몰입감 높음"),
-    (["무섭", "공포", "소름"], "공포 분위기 강함"),
-    (["소재", "설정", "오컬트"], "소재 흥미로움"),
-    (["재밌", "존잼", "흥미"], "재미 있음"),
-    (["잘 만들", "완성도", "깔끔"], "완성도 좋음"),
-]
-
-NEGATIVE_RULES = [
-    (["지루", "루즈", "늘어", "재미없"], "전개 지루함"),
-    (["개연성", "억지", "뜬금"], "스토리 아쉬움"),
-    (["후반", "결말", "마무리"], "후반부 아쉬움"),
-    (["이해 안", "모르겠", "난해"], "이해 어려움"),
-    (["cg", "괴수", "사무라이"], "설정 이질감"),
-    (["실망", "별로", "아쉽"], "완성도 아쉬움"),
-]
-
-
-# ---------------------------
-# Text utilities
-# ---------------------------
 def normalize_text(text: str) -> str:
     text = text.lower().strip()
     text = re.sub(r"\s+", " ", text)
     return text
 
 
-def match_rules(text: str) -> List[str]:
-    normalized = normalize_text(text)
-    phrases: List[str] = []
+def infer_sentiment(phrase: str) -> str:
+    negative_keywords = [
+        "아쉬움", "지루함", "어려움", "이질감", "부정 반응", "아쉬움", "부족", "약함"
+    ]
+    positive_keywords = [
+        "좋음", "높음", "있음", "흥미로움", "긍정 반응", "인상적", "매력적"
+    ]
 
-    for keywords, label in POSITIVE_RULES:
-        if any(keyword in normalized for keyword in keywords):
+    for keyword in negative_keywords:
+        if keyword in phrase:
+            return "negative"
+
+    for keyword in positive_keywords:
+        if keyword in phrase:
+            return "positive"
+
+    return "positive"
+
+
+def extract_key_phrases_rule_based(text: str) -> List[str]:
+    normalized = normalize_text(text)
+
+    topic_keywords = {
+        "연기 좋음": ["연기", "배우", "연기력", "캐스팅"],
+        "스토리 좋음": ["스토리", "전개", "서사", "결말", "개연성"],
+        "스토리 아쉬움": ["스토리", "전개", "서사", "결말", "개연성", "억지", "뜬금"],
+        "영상미 좋음": ["영상미", "비주얼", "화면", "촬영", "색감", "스케일", "cg"],
+        "연출 좋음": ["연출", "장면", "분위기", "구성"],
+        "음향 좋음": ["음악", "ost", "사운드", "음향", "효과음"],
+        "전개 지루함": ["지루", "루즈", "늘어", "길다", "러닝타임", "템포"],
+        "재미 있음": ["재밌", "재미", "흥미진진", "존잼"],
+        "재미 아쉬움": ["노잼", "재미없", "심심"],
+        "몰입감 높음": ["몰입", "집중", "긴장감", "빠져들"],
+        "감정적으로 좋음": ["감동", "여운", "먹먹", "울림"],
+        "메시지 좋음": ["메시지", "주제", "의미"],
+        "이해 어려움": ["난해", "복잡", "이해 안", "모르겠"],
+    }
+
+    sentiment_hints = {
+        "positive": ["좋", "훌륭", "뛰어", "인상적", "압도적", "강렬", "신선", "재밌", "재미있", "감동", "몰입", "매력"],
+        "negative": ["아쉽", "별로", "지루", "루즈", "늘어", "실망", "부족", "약하", "어색", "난해", "복잡"],
+    }
+
+    scored = []
+
+    for label, keywords in topic_keywords.items():
+        score = 0
+
+        for keyword in keywords:
+            if keyword in normalized:
+                score += 1
+
+        if "좋음" in label or "있음" in label or "높음" in label:
+            for hint in sentiment_hints["positive"]:
+                if hint in normalized:
+                    score += 1
+
+        if "아쉬움" in label or "지루함" in label or "어려움" in label:
+            for hint in sentiment_hints["negative"]:
+                if hint in normalized:
+                    score += 1
+
+        if score > 0:
+            scored.append((label, score))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+
+    phrases = []
+    for label, _ in scored:
+        if label not in phrases:
             phrases.append(label)
 
-    for keywords, label in NEGATIVE_RULES:
-        if any(keyword in normalized for keyword in keywords):
-            phrases.append(label)
-
-    # 중복 제거
-    phrases = list(dict.fromkeys(phrases))
-    return phrases
-
-
-def ensure_phrase_count(phrases: List[str], text: str) -> List[str]:
-    normalized = normalize_text(text)
-
-    if len(phrases) == 0:
-        if "좋" in normalized or "잘" in normalized:
-            phrases = ["긍정 반응", "감상 표현"]
-        elif "별로" in normalized or "아쉽" in normalized or "실망" in normalized:
-            phrases = ["부정 반응", "감상 표현"]
+    # 너무 빈약하면 감정 fallback 추가
+    if not phrases:
+        if any(word in normalized for word in sentiment_hints["positive"]):
+            phrases = ["긍정 반응"]
+        elif any(word in normalized for word in sentiment_hints["negative"]):
+            phrases = ["부정 반응"]
         else:
-            phrases = ["기타 의견", "감상 표현"]
+            phrases = ["기타 의견"]
 
-    elif len(phrases) == 1:
-        if "좋" in normalized or "잘" in normalized:
-            phrases.append("긍정 반응")
-        elif "별로" in normalized or "아쉽" in normalized or "실망" in normalized:
-            phrases.append("부정 반응")
+    # 너무 적으면 보조 표현 추가
+    if len(phrases) == 1:
+        if any(word in normalized for word in sentiment_hints["positive"]):
+            if "긍정 반응" not in phrases:
+                phrases.append("긍정 반응")
+        elif any(word in normalized for word in sentiment_hints["negative"]):
+            if "부정 반응" not in phrases:
+                phrases.append("부정 반응")
         else:
-            phrases.append("감상 표현")
+            if "기타 의견" not in phrases:
+                phrases.append("기타 의견")
 
-    return phrases[:5]
+    return phrases[:3]
 
 
-# ---------------------------
-# Mode 1: Dummy
-# ---------------------------
-def extract_key_phrases_dummy(input_data: dict) -> dict:
-    request = LLMRequestSchema.model_validate(input_data)
+def build_phrase_items(phrases: List[str]) -> List[PhraseSentimentItem]:
+    items = []
+    for phrase in phrases:
+        items.append(
+            PhraseSentimentItem(
+                text=phrase,
+                sentiment=infer_sentiment(phrase),
+            )
+        )
+    return items
 
-    results = []
-    for review in request.reviews:
+
+def extract_phrases_dummy(payload: LLMRequestSchema) -> LLMResponseSchema:
+    results: List[LLMResultItem] = []
+
+    for review in payload.reviews:
+        phrases = ["기타 의견"]
         results.append(
-            {
-                "review_id": review.review_id,
-                "key_phrases": ["기타 의견", "감상 표현"],
-            }
+            LLMResultItem(
+                review_id=review.review_id,
+                phrases=build_phrase_items(phrases),
+            )
         )
 
-    response = LLMResponseSchema(
-        job_id=request.job_id,
-        movie_id=request.movie_id,
+    return LLMResponseSchema(
+        job_id=payload.job_id,
+        movie_id=payload.movie_id,
+        movie_title=payload.movie_title,
         results=results,
     )
-    return response.model_dump(mode="json")
 
 
-# ---------------------------
-# Mode 2: Rule-based
-# ---------------------------
-def extract_key_phrases_rule_based(input_data: dict) -> dict:
-    request = LLMRequestSchema.model_validate(input_data)
+def extract_phrases_rule_based(payload: LLMRequestSchema) -> LLMResponseSchema:
+    results: List[LLMResultItem] = []
 
-    results = []
-
-    for review in request.reviews:
-        phrases = match_rules(review.text)
-        phrases = ensure_phrase_count(phrases, review.text)
+    for review in payload.reviews:
+        extracted_phrases = extract_key_phrases_rule_based(review.text)
+        phrase_items = build_phrase_items(extracted_phrases)
 
         results.append(
-            {
-                "review_id": review.review_id,
-                "key_phrases": phrases,
-            }
+            LLMResultItem(
+                review_id=review.review_id,
+                phrases=phrase_items,
+            )
         )
 
-    response = LLMResponseSchema(
-        job_id=request.job_id,
-        movie_id=request.movie_id,
+    return LLMResponseSchema(
+        job_id=payload.job_id,
+        movie_id=payload.movie_id,
+        movie_title=payload.movie_title,
         results=results,
     )
-    return response.model_dump(mode="json")
 
 
-# ---------------------------
-# Mode 3: OpenAI
-# ---------------------------
-def extract_key_phrases_openai(input_data: dict) -> dict:
-    request = LLMRequestSchema.model_validate(input_data)
-    client = _get_openai_client()
+_OPENAI_CHUNK_SIZE = 200
+_OPENAI_MAX_WORKERS = 5
 
-    if client is None:
-        print("[LLM] OPENAI_API_KEY not found. Fallback to rule_based mode.")
-        return extract_key_phrases_rule_based(input_data)
+_OPENAI_SYSTEM_INSTRUCTION = """
+당신은 한국어 영화 리뷰를 클러스터링하기 좋은 (phrase, sentiment) 쌍으로 정리하는 분석기입니다.
 
-    system_instruction = """
-당신은 영화 리뷰 분석가입니다.
-주어진 각 리뷰마다 핵심 표현을 2~5개 추출하세요.
-각 표현은 짧고 명확한 한국어 구문이어야 합니다.
-반드시 review_id를 유지해야 하며, JSON 형식으로만 응답하세요.
+== 작업 흐름 (각 리뷰마다 순서대로) ==
+1. 리뷰에서 관객이 평가한 영화 요소를 1~3개 식별합니다.
+2. 각 요소에 대해 어떤 점을 평가했는지 짧은 phrase로 작성합니다.
+3. phrase에 sentiment("positive" 또는 "negative")를 부여합니다.
+4. (text, sentiment) 두 필드를 모두 채워 반환합니다.
+
+== phrase 작성 규칙 ==
+- 리뷰 1개당 phrase는 1~3개만. 같은 의미의 phrase를 한 리뷰 안에서 중복하지 않습니다.
+- 길이는 보통 2~5어절, 20자 안팎의 짧은 한국어 구문. 리뷰 원문을 길게 복사하지 않습니다.
+- 기본 형식: "평가 대상 + 평가" (예: "배우 연기 좋음", "후반 전개 아쉬움", "사운드 압도적").
+- 하나의 phrase에는 한 가지 평가 대상만 담습니다. 여러 요소가 섞여 있으면 phrase를 나눕니다.
+  예: "음악 연출 연기 좋음" -> ["사운드 좋음", "연출 좋음", "배우 연기 좋음"] 중 핵심만
+  예: "영상미와 사운드 경이" -> ["영상미 뛰어남", "사운드 압도적"]
+- 너무 일반적인 표현 금지: "좋음", "별로", "명작", "기타 의견", "긍정 반응", "부정 반응".
+- 배우/감독/음악감독 등 인물이 평가의 핵심이면 이름을 phrase에 포함해도 됩니다.
+  예: "김고은 연기 압도적", "한스 짐머 사운드 압도적".
+- 인물명이 핵심이 아니면 일반 범주로 씁니다. 예: "배우 연기 좋음", "감독 연출 좋음".
+- review_id는 입력값과 정확히 동일하게 유지합니다.
+
+== 출력 형식 ==
+- 출력은 JSON 객체만. 설명, 마크다운, 코드블록은 절대 쓰지 않습니다.
 """
 
-    prompt = f"""
-분석할 리뷰 데이터:
-{json.dumps([r.model_dump(mode="json") for r in request.reviews], ensure_ascii=False, indent=2)}
 
-출력 형식:
+def _build_results_rule_based(reviews: List[ReviewItem]) -> List[LLMResultItem]:
+    results: List[LLMResultItem] = []
+    for review in reviews:
+        phrases = extract_key_phrases_rule_based(review.text)
+        results.append(
+            LLMResultItem(
+                review_id=review.review_id,
+                phrases=build_phrase_items(phrases),
+            )
+        )
+    return results
+
+
+def _extract_chunk_openai(
+    client: OpenAI,
+    chunk: List[ReviewItem],
+    chunk_idx: int,
+) -> List[LLMResultItem]:
+    reviews_json = json.dumps(
+        [{"review_id": r.review_id, "text": r.text} for r in chunk],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+    prompt = f"""
+아래 영화 리뷰 배열을 분석하세요.
+
+입력:
+{reviews_json}
+
+반환 JSON 형식:
 {{
   "results": [
     {{
-      "review_id": "r1",
-      "key_phrases": ["연기 좋음", "스토리 아쉬움"]
+      "review_id": "입력 review_id",
+      "phrases": [
+        {{
+          "text": "짧은 평가 관점",
+          "sentiment": "positive 또는 negative"
+        }}
+      ]
     }}
   ]
 }}
+
+필수 조건:
+- results 길이는 입력 리뷰 수와 같아야 합니다.
+- 모든 입력 review_id가 정확히 한 번씩 포함되어야 합니다.
+- 각 phrase는 text, sentiment 두 필드를 모두 포함해야 합니다.
+- sentiment 값은 "positive" 또는 "negative" 중 하나입니다.
+- JSON 외의 텍스트는 출력하지 마세요.
 """
 
     try:
         response = client.chat.completions.create(
             model="gpt-5.4-nano",
             messages=[
-                {"role": "system", "content": system_instruction},
+                {"role": "system", "content": _OPENAI_SYSTEM_INSTRUCTION},
                 {"role": "user", "content": prompt},
             ],
             response_format={"type": "json_object"},
             temperature=0.3,
         )
 
+        finish_reason = response.choices[0].finish_reason
+        if finish_reason == "length":
+            print(
+                f"[LLM] chunk {chunk_idx} truncated by output token limit "
+                f"(finish_reason=length); missing items will fall back to rule_based"
+            )
+
         content = response.choices[0].message.content
         parsed = json.loads(content)
 
-        response_obj = LLMResponseSchema(
-            job_id=request.job_id,
-            movie_id=request.movie_id,
-            results=parsed.get("results", []),
-        )
-        return response_obj.model_dump(mode="json")
+        by_review_id: dict[str, LLMResultItem] = {}
+        for item in parsed.get("results", []):
+            phrase_items = [
+                PhraseSentimentItem(text=p["text"], sentiment=p["sentiment"])
+                for p in item.get("phrases", [])
+            ]
+            by_review_id[item["review_id"]] = LLMResultItem(
+                review_id=item["review_id"],
+                phrases=phrase_items,
+            )
+
+        results: List[LLMResultItem] = []
+        missing = 0
+        for review in chunk:
+            hit = by_review_id.get(review.review_id)
+            if hit is not None:
+                results.append(hit)
+            else:
+                missing += 1
+                phrases = extract_key_phrases_rule_based(review.text)
+                results.append(
+                    LLMResultItem(
+                        review_id=review.review_id,
+                        phrases=build_phrase_items(phrases),
+                    )
+                )
+        if missing:
+            print(
+                f"[LLM] chunk {chunk_idx} filled {missing}/{len(chunk)} missing "
+                f"review_ids via rule_based"
+            )
+        return results
 
     except (ValueError, json.JSONDecodeError, KeyError, TypeError) as e:
-        print(f"[LLM] OpenAI response parse failed: {e}")
-        return extract_key_phrases_rule_based(input_data)
+        print(
+            f"[LLM] chunk {chunk_idx} parse failed ({e}); "
+            f"falling back to rule_based for whole chunk"
+        )
+        return _build_results_rule_based(chunk)
 
     except (APIError, OpenAIError, TimeoutError) as e:
-        print(f"[LLM] OpenAI call failed: {e}")
-        return extract_key_phrases_rule_based(input_data)
+        print(
+            f"[LLM] chunk {chunk_idx} OpenAI call failed ({e}); "
+            f"falling back to rule_based for whole chunk"
+        )
+        return _build_results_rule_based(chunk)
 
 
-# ---------------------------
-# Dispatcher
-# ---------------------------
-def extract_key_phrases(input_data: dict, mode: str = "rule_based") -> dict:
+def extract_phrases_openai(payload: LLMRequestSchema) -> LLMResponseSchema:
+    client = _get_openai_client()
+
+    if client is None:
+        print("[LLM] OPENAI_API_KEY not found. Fallback to rule_based mode.")
+        return extract_phrases_rule_based(payload)
+
+    reviews = list(payload.reviews)
+    chunks = [
+        reviews[i : i + _OPENAI_CHUNK_SIZE]
+        for i in range(0, len(reviews), _OPENAI_CHUNK_SIZE)
+    ]
+    print(
+        f"[LLM] openai chunking: {len(reviews)} reviews -> {len(chunks)} chunks "
+        f"of {_OPENAI_CHUNK_SIZE} (max_workers={_OPENAI_MAX_WORKERS})"
+    )
+
+    chunk_results: dict[int, List[LLMResultItem]] = {}
+    with ThreadPoolExecutor(max_workers=_OPENAI_MAX_WORKERS) as executor:
+        future_to_idx = {
+            executor.submit(_extract_chunk_openai, client, chunk, idx): idx
+            for idx, chunk in enumerate(chunks)
+        }
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            chunk_results[idx] = future.result()
+
+    all_results: List[LLMResultItem] = []
+    for idx in range(len(chunks)):
+        all_results.extend(chunk_results[idx])
+
+    return LLMResponseSchema(
+        job_id=payload.job_id,
+        movie_id=payload.movie_id,
+        movie_title=payload.movie_title,
+        results=all_results,
+    )
+
+
+def extract_phrases_with_sentiment(
+    payload: LLMRequestSchema,
+    mode: str = "openai",
+) -> LLMResponseSchema:
     if mode == "dummy":
         print("[LLM] mode=dummy")
-        return extract_key_phrases_dummy(input_data)
+        return extract_phrases_dummy(payload)
 
     if mode == "rule_based":
         print("[LLM] mode=rule_based")
-        return extract_key_phrases_rule_based(input_data)
+        return extract_phrases_rule_based(payload)
 
     if mode == "openai":
         print("[LLM] mode=openai")
-        return extract_key_phrases_openai(input_data)
+        return extract_phrases_openai(payload)
 
     raise ValueError(f"Unsupported mode: {mode}")
