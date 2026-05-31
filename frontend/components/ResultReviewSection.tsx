@@ -8,12 +8,12 @@ type OpinionGroup = {
   cluster_id: string;
   label: string;
   count: number;
+  sentiment?: "positive" | "negative";
 };
 
 type Review = {
   id: string;
   text: string;
-  sentiment: "positive" | "negative" | "neutral";
 };
 
 type ResultReviewSectionProps = {
@@ -26,7 +26,6 @@ type ReviewsApiItem = {
   id?: string;
   text?: string;
   review_text?: string;
-  sentiment?: "positive" | "negative" | "neutral" | string;
 };
 
 type ReviewsApiResponse =
@@ -42,6 +41,20 @@ type ReviewsApiResponse =
 
 const PAGE_SIZE = 5;
 
+function sentimentLabel(sentiment?: "positive" | "negative") {
+  if (sentiment !== "positive" && sentiment !== "negative") return null;
+  const isPos = sentiment === "positive";
+  return (
+    <span
+      className={`font-mono text-[10px] uppercase tracking-[0.2em] ${
+        isPos ? "text-[#ff2c63]" : "text-[#6b6760]"
+      }`}
+    >
+      {isPos ? "긍정" : "부정"}
+    </span>
+  );
+}
+
 function normalizeReviews(response: ReviewsApiResponse): {
   reviews: Review[];
   totalCount: number;
@@ -54,12 +67,6 @@ function normalizeReviews(response: ReviewsApiResponse): {
   const reviews: Review[] = rawReviews.map((review, index) => ({
     id: review.review_id ?? review.id ?? `review-${index}`,
     text: review.text ?? review.review_text ?? "",
-    sentiment:
-      review.sentiment === "positive" ||
-      review.sentiment === "negative" ||
-      review.sentiment === "neutral"
-        ? review.sentiment
-        : "neutral",
   }));
 
   const totalCount = Array.isArray(response)
@@ -182,29 +189,32 @@ export default function ResultReviewSection({
 
   // 펼침 영역 컴포넌트 (TOP 3와 하단에서 공통 사용)
   const renderExpandedReviews = (group: OpinionGroup) => (
-    <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
-      <div className="mb-4 flex items-end justify-between gap-4">
+    <div className="mt-4 rounded-[10px] border border-[#e8e3d6] bg-white p-7">
+      <div className="mb-5 flex items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-blue-600">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9a958b]">
             Selected Opinion
           </p>
-          <h3 className="mt-1 text-2xl font-bold text-gray-900">
-            {group.label}
-          </h3>
+          <div className="mt-1.5 flex items-baseline gap-3">
+            <h3 className="font-serif text-[26px] font-medium text-[#161616]">
+              {group.label}
+            </h3>
+            {sentimentLabel(group.sentiment)}
+          </div>
         </div>
-        <p className="text-sm font-semibold text-gray-500">
+        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#6b6760] tabular-nums">
           총 {totalCount}개 리뷰
         </p>
       </div>
 
       {isLoading && (
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-gray-500">
+        <div className="rounded-[8px] border border-[#e8e3d6] bg-[#fbf9f3] p-6 text-[#6b6760]">
           리뷰를 불러오는 중입니다...
         </div>
       )}
 
       {errorMessage && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-600">
+        <div className="rounded-[8px] border border-[#e6c4cb] bg-[#fdf3f5] p-6 text-sm font-medium text-[#c0392b]">
           {errorMessage}
         </div>
       )}
@@ -234,7 +244,7 @@ export default function ResultReviewSection({
     <>
       {/* 상단: 많이 나온 의견 TOP 3 */}
       <section className="mt-10">
-        <h2 className="text-xl font-bold text-gray-900">많이 나온 의견 TOP 3</h2>
+        <h2 className="font-serif text-[24px] font-medium text-[#161616]">많이 나온 의견 TOP 3</h2>
 
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           {topThree.map((group, index) => {
@@ -244,19 +254,24 @@ export default function ResultReviewSection({
                 key={group.cluster_id}
                 type="button"
                 onClick={() => handleSelectGroup(group.cluster_id)}
-                className={`rounded-2xl border p-6 text-left shadow-sm transition ${
+                className={`rounded-[10px] border p-6 text-left transition ${
                   isSelected
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 bg-white hover:border-blue-300"
+                    ? "border-[#ff2c63] bg-[#fbf9f3]"
+                    : "border-[#e8e3d6] bg-white hover:border-[#dcd6c5]"
                 }`}
               >
-                <p className="text-sm font-semibold text-blue-600">
-                  {index + 1}위
-                </p>
-                <h3 className="mt-3 text-lg font-bold text-gray-900">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9a958b]">
+                    {index + 1}위
+                  </span>
+                  {sentimentLabel(group.sentiment)}
+                </div>
+                <h3 className="mt-3 font-serif text-[20px] font-medium text-[#161616]">
                   {group.label}
                 </h3>
-                <p className="mt-2 text-gray-500">{group.count}건</p>
+                <p className="mt-2 font-mono text-[11px] tracking-tight text-[#6b6760] tabular-nums">
+                  {group.count}건
+                </p>
               </button>
             );
           })}
@@ -269,8 +284,8 @@ export default function ResultReviewSection({
       {/* 하단: 그 외 의견 그룹 */}
       {restGroups.length > 0 && (
         <section className="mt-10">
-          <h2 className="text-xl font-bold text-gray-900">그 외 의견 그룹</h2>
-          <p className="mt-2 text-sm text-gray-500">
+          <h2 className="font-serif text-[24px] font-medium text-[#161616]">그 외 의견 그룹</h2>
+          <p className="mt-2 text-sm text-[#6b6760]">
             의견 그룹을 선택하면 해당 그룹의 리뷰가 바로 아래에 펼쳐집니다.
           </p>
 
@@ -281,10 +296,10 @@ export default function ResultReviewSection({
               return (
                 <div
                   key={group.cluster_id}
-                  className={`rounded-2xl border shadow-sm transition ${
+                  className={`rounded-[10px] border transition ${
                     isSelected
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 bg-white"
+                      ? "border-[#ff2c63] bg-[#fbf9f3]"
+                      : "border-[#e8e3d6] bg-white"
                   }`}
                 >
                   <button
@@ -293,19 +308,22 @@ export default function ResultReviewSection({
                     className="flex w-full items-center justify-between px-6 py-4 text-left"
                   >
                     <div>
-                      <p className="font-semibold text-gray-900">
-                        {group.label}
-                      </p>
-                      <p className="mt-1 text-xs text-gray-500">
+                      <div className="flex items-baseline gap-3">
+                        <p className="font-serif text-[17px] font-medium text-[#161616]">
+                          {group.label}
+                        </p>
+                        {sentimentLabel(group.sentiment)}
+                      </div>
+                      <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[#9a958b]">
                         클릭해서 관련 리뷰 보기
                       </p>
                     </div>
 
                     <div className="flex items-center gap-4">
-                      <span className="text-sm font-semibold text-gray-500">
+                      <span className="font-mono text-[11px] tracking-tight text-[#6b6760] tabular-nums">
                         {group.count}건
                       </span>
-                      <span className="text-lg font-bold text-blue-600">
+                      <span className="text-lg font-medium text-[#ff2c63]">
                         {isSelected ? "−" : "+"}
                       </span>
                     </div>

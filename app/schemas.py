@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, date
+from datetime import date as DateType  # 필드명 `date`와 타입명 충돌 회피용 별칭
 from typing import List, Optional, Literal
 
 from pydantic import BaseModel, Field
@@ -42,8 +43,9 @@ CollectionDepth = Literal["preview", "full"]
 
 
 class CollectionRunRequest(BaseModel):
+    # B안: caller passes movie_id only; the backend resolves cgv_movie_code
+    # internally from the movies table (collection_service.run_collection_now).
     movie_id: str = Field(..., examples=["kobis_20252402"])
-    cgv_movie_code: Optional[str] = Field(default=None, examples=["30001046"])
     source: str = Field(default="cgv", examples=["cgv"])
     depth: CollectionDepth = Field(
         default="preview",
@@ -82,8 +84,9 @@ class CollectionJobResponse(BaseModel):
 
 
 class SubscribeRequest(BaseModel):
+    # B안: caller passes movie_id only; the backend resolves cgv_movie_code
+    # internally from the movies table (collection_service.subscribe_to_movie).
     movie_id: str = Field(..., examples=["kobis_20252402"])
-    cgv_movie_code: Optional[str] = Field(default=None, examples=["30001046"])
     source: str = Field(default="cgv", examples=["cgv"])
 
 
@@ -117,6 +120,33 @@ class MovieSchema(BaseModel):
     updated_at: datetime
     release_year: Optional[int] = Field(default=None, examples=[2024])
     notes: Optional[str] = Field(default=None, examples=["시연용"])
+
+
+ReviewTrafficGranularity = Literal["day", "week"]
+
+
+class ReviewTrafficPoint(BaseModel):
+    date: DateType = Field(
+        ...,
+        description="버킷 시작일. granularity=week이면 해당 주의 월요일.",
+        examples=["2026-05-03"],
+    )
+    count: int = Field(..., examples=[12])
+
+
+class ReviewTrafficResponse(BaseModel):
+    movie_id: str = Field(..., examples=["kobis_20259773"])
+    movie_title: str = Field(..., examples=["슈퍼 마리오 갤럭시"])
+    granularity: ReviewTrafficGranularity = Field(..., examples=["day"])
+    total_reviews: int = Field(
+        ...,
+        description="written_at이 있는 리뷰 수 (그래프에 집계된 총량).",
+        examples=[3561],
+    )
+    points: List[ReviewTrafficPoint] = Field(
+        default_factory=list,
+        description="버킷 시작일 오름차순. min~max 사이 빈 버킷은 count=0으로 채움.",
+    )
 
 
 class BatchJobSchema(BaseModel):

@@ -2,8 +2,8 @@
 
 Endpoints:
 - POST /collection/reviews/run-now — synchronously trigger one-shot collection
-  for a given (movie_id, cgv_movie_code) pair. Returns the resulting
-  collection_job row.
+  for a given movie_id. The backend resolves cgv_movie_code internally from
+  the movies table. Returns the resulting collection_job row.
 
 Future endpoints (Step 7+): GET /collection/jobs/{id}, GET /collection/jobs
 (listing).
@@ -37,7 +37,6 @@ def run_now(request: CollectionRunRequest) -> CollectionJobResponse:
     try:
         job = collection_service.run_collection_now(
             movie_id=request.movie_id,
-            cgv_movie_code=request.cgv_movie_code,
             source=request.source,
             depth=request.depth,
         )
@@ -79,7 +78,6 @@ def subscribe(request: SubscribeRequest) -> SubscribeResponse:
     try:
         result = collection_service.subscribe_to_movie(
             movie_id=request.movie_id,
-            cgv_movie_code=request.cgv_movie_code,
             source=request.source,
         )
     except MovieNotFoundError as exc:

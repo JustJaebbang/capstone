@@ -9,7 +9,7 @@ from app.schemas import (
     OpinionReviewItem,
     SentimentRatioSchema,
 )
-from app.services.labels import make_label
+from app.services.labels import generate_top_opinion_labels
 
 REVIEWS_PREVIEW_LIMIT = 10
 
@@ -200,14 +200,19 @@ def build_final_result(
 ) -> FinalResultSchema:
     top_opinions = []
     clusters = cluster_result["clusters"]
+    top_clusters = clusters[:3]
 
-    for idx, cluster in enumerate(clusters[:3], start=1):
+    # 라벨은 클러스터 대표 phrase를 근거로 LLM이 구어체 한 줄로 생성(배치 1회).
+    # 실패 항목은 generate_top_opinion_labels 내부에서 make_label로 폴백된다.
+    labels = generate_top_opinion_labels(top_clusters, llm_result, job_id=job.job_id)
+
+    for idx, (cluster, label) in enumerate(zip(top_clusters, labels), start=1):
         top_opinions.append(
             TopOpinionItem(
                 rank=idx,
                 topic=cluster["topic"],
                 sentiment=cluster["sentiment"],
-                label=make_label(cluster["topic"], cluster["sentiment"]),
+                label=label,
                 count=cluster["count"],
             )
         )

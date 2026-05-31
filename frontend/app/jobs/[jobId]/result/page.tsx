@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import SentimentRatio from "@/components/SentimentRatio";
+import ReviewTrafficChart from "@/components/ReviewTrafficChart";
 import ElementScoreChart from "@/components/ElementScoreChart";
 import ResultReviewSection from "@/components/ResultReviewSection";
 import WatchaFontStyles from "@/components/style-experiments/watcha/WatchaFontStyles";
@@ -8,7 +8,6 @@ import WatchaSentimentRing from "@/components/style-experiments/watcha/WatchaSen
 import WatchaFooter from "@/components/style-experiments/watcha/WatchaFooter";
 
 import { getFinalResult, getOpinionGroups } from "@/lib/api";
-import { fetchElementScores } from "@/lib/element-scores";
 
 type ResultPageProps = {
   params: Promise<{
@@ -16,10 +15,19 @@ type ResultPageProps = {
   }>;
 };
 
+type ApiElementScore = {
+  element: string;
+  score: number | null;
+  positive_count: number;
+  negative_count: number;
+  mention_count: number;
+};
+
 type ApiFinalResult = {
   job_id?: string;
   movie_id?: string;
   movie_title?: string;
+  poster_url?: string | null;
   summary: {
     sentiment_ratio: {
       positive_percent: number;
@@ -30,6 +38,7 @@ type ApiFinalResult = {
       total_review_count?: number;
       rule?: string;
     };
+    element_scores?: ApiElementScore[];
   };
 };
 
@@ -37,6 +46,7 @@ type ApiOpinionGroup = {
   cluster_id: string | number;
   label: string;
   count: number;
+  sentiment?: "positive" | "negative";
 };
 
 type OpinionGroupsResponse =
@@ -51,6 +61,7 @@ type ViewOpinionGroup = {
   cluster_id: string;
   label: string;
   count: number;
+  sentiment?: "positive" | "negative";
 };
 
 function normalizeOpinionGroups(
@@ -65,8 +76,29 @@ function normalizeOpinionGroups(
       cluster_id: String(group.cluster_id),
       label: group.label,
       count: group.count,
+      sentiment: group.sentiment,
     }))
     .sort((a, b) => b.count - a.count);
+}
+
+function sentimentVerdict(positivePercent: number, reviewCount: number | null): string {
+  const p = positivePercent;
+  const n = reviewCount;
+
+  // 양 끝 + 리뷰 수 보정 (기본 단계보다 우선, n 있을 때만)
+  if (n !== null) {
+    if (p >= 95 && n >= 500) return "압도적으로 긍정적"; // 강화
+    if (p < 20 && n >= 500) return "압도적으로 부정적"; // 강화
+    if (p >= 80 && n < 50) return "긍정적"; // 약화
+    if (p < 20 && n < 50) return "부정적"; // 약화
+  }
+
+  // 기본 5단계 (호감 % 기준)
+  if (p >= 80) return "매우 긍정적"; // 80~100
+  if (p >= 70) return "대체로 긍정적"; // 70~79
+  if (p >= 40) return "복합적"; // 40~69
+  if (p >= 20) return "대체로 부정적"; // 20~39
+  return "매우 부정적"; // 0~19
 }
 
 // Deterministic poster gradient — moody, film-still palette
@@ -90,10 +122,9 @@ function posterGradient(seed: string): string {
 export default async function ResultPage({ params }: ResultPageProps) {
   const { jobId } = await params;
 
-  const [finalResultRaw, opinionGroupsRaw, elementScores] = await Promise.all([
+  const [finalResultRaw, opinionGroupsRaw] = await Promise.all([
     getFinalResult(jobId),
     getOpinionGroups(jobId),
-    fetchElementScores(jobId),
   ]);
   const finalResult = finalResultRaw as ApiFinalResult;
   const opinionGroupsResponse = opinionGroupsRaw as OpinionGroupsResponse;
@@ -163,37 +194,39 @@ export default async function ResultPage({ params }: ResultPageProps) {
                 </span>
                 <div
                   className="relative aspect-[3/4] w-full overflow-hidden rounded-[10px] shadow-[0_28px_60px_-22px_rgba(20,15,5,0.4)]"
-                  style={{ background: posterGradient(posterSeed) }}
+                  style={
+                    finalResult.poster_url
+                      ? undefined
+                      : { background: posterGradient(posterSeed) }
+                  }
                 >
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-overlay"
-                    style={{
-                      backgroundImage:
-                        "radial-gradient(rgba(255,255,255,0.6) 1px, transparent 1px)",
-                      backgroundSize: "3px 3px",
-                    }}
-                  />
+                  {finalResult.poster_url ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={finalResult.poster_url}
+                        alt={movieTitle}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    </>
+                  ) : (
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-overlay"
+                      style={{
+                        backgroundImage:
+                          "radial-gradient(rgba(255,255,255,0.6) 1px, transparent 1px)",
+                        backgroundSize: "3px 3px",
+                      }}
+                    />
+                  )}
                   <div className="absolute inset-0 flex flex-col justify-between p-10">
-                    <div className="flex items-start justify-between">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/55">
-                        분석 결과
-                      </p>
-                      <span className="rounded-full bg-white/10 px-3 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-white/80 backdrop-blur">
+                    <div className="flex items-start justify-end">
+                      <span className="rounded-full bg-white/10 px-3 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[#27ae60] backdrop-blur">
                         completed
                       </span>
                     </div>
-                    <div>
-                      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/55">
-                        job · {effectiveJobId}
-                      </p>
-                      <h2 className="mt-3 font-serif text-[56px] font-medium leading-[1.02] tracking-[-0.025em] text-white sm:text-[64px]">
-                        {movieTitle}
-                      </h2>
-                    </div>
                   </div>
-                  {/* completed band */}
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-[#27ae60]" />
                 </div>
               </div>
 
@@ -202,28 +235,9 @@ export default async function ResultPage({ params }: ResultPageProps) {
                 <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#9a958b]">
                   Analysis · 분석 완료
                 </p>
-                <h1 className="mt-5 font-serif text-[58px] font-normal leading-[1.02] tracking-[-0.028em] text-[#161616] sm:text-[72px] lg:text-[84px]">
-                  관객은 <span className="italic text-[#ff2c63]">
-                    {sentimentRatio.positive_percent >= sentimentRatio.negative_percent ? "호감" : "불호"}
-                  </span>으로
-                  <br />
-                  답했습니다.
+                <h1 className="mt-5 whitespace-nowrap font-serif text-[clamp(34px,8vw,84px)] font-normal italic leading-[1.02] tracking-[-0.028em] text-[#ff2c63]">
+                  {sentimentVerdict(sentimentRatio.positive_percent, totalReviewCount)}
                 </h1>
-                <p className="mt-6 max-w-[480px] text-[16px] leading-[1.75] text-[#3d3a35]">
-                  {totalReviewCount !== null && (
-                    <>총 {totalReviewCount.toLocaleString()}건의 리뷰가 </>
-                  )}
-                  {opinionGroups.length}개 의견 군집으로 묶였습니다.
-                  {topGroup && (
-                    <>
-                      {" "}가장 큰 목소리는{" "}
-                      <em className="not-italic font-medium text-[#161616]">
-                        &ldquo;{topGroup.label}&rdquo;
-                      </em>
-                      였습니다.
-                    </>
-                  )}
-                </p>
 
                 <div className="mt-10 flex items-center gap-10">
                   <WatchaSentimentRing
@@ -310,7 +324,7 @@ export default async function ResultPage({ params }: ResultPageProps) {
                   Editor&apos;s note · 01
                 </p>
                 <h2 className="mt-4 font-serif text-[36px] leading-[1.1] tracking-[-0.02em] text-[#161616] sm:text-[44px]">
-                  감성 비율과 <span className="italic">요소별 점수</span>
+                  리뷰 트래픽과 <span className="italic">요소별 점수</span>
                 </h2>
               </div>
               <p className="max-w-[420px] text-[14px] leading-[1.7] text-[#3d3a35] md:text-right">
@@ -320,12 +334,9 @@ export default async function ResultPage({ params }: ResultPageProps) {
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <SentimentRatio
-                positivePercent={sentimentRatio.positive_percent}
-                negativePercent={sentimentRatio.negative_percent}
-              />
+              <ReviewTrafficChart movieId={finalResult.movie_id ?? ""} />
               <ElementScoreChart
-                scores={elementScores}
+                scores={finalResult.summary.element_scores ?? []}
                 totalReviewCount={totalReviewCount}
               />
             </div>
@@ -340,11 +351,11 @@ export default async function ResultPage({ params }: ResultPageProps) {
                 Notebook · 02
               </p>
               <h2 className="font-serif text-[36px] leading-[1.05] tracking-[-0.02em] text-[#161616] sm:text-[44px]">
-                관객 <span className="italic text-[#ff2c63]">의견 군집</span>
+                관객 <span className="italic text-[#ff2c63]">의견 그룹</span>
               </h2>
               <p className="mt-2 max-w-[560px] text-[15px] leading-[1.7] text-[#3d3a35]">
-                가장 자주 등장한 의견 TOP 3와, 그 뒤를 잇는 군집들입니다.
-                카드를 누르면 해당 군집에 묶인 실제 리뷰가 펼쳐집니다.
+                가장 많이 나온 의견 TOP 3와, 그 뒤를 잇는 그룹들입니다.
+                카드를 누르면 해당 그룹의 실제 리뷰가 펼쳐집니다.
               </p>
             </div>
 
