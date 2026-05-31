@@ -1,0 +1,30 @@
+{
+  "total_movies": 2,
+  "completed_movies": 2,
+  "total_reviews": 2486,
+  "avg_processing_seconds": 3.2,
+  "overall_sentiment": {
+    "positive_percent": 68,
+    "negative_percent": 32
+  },
+  "top_keywords_overall": [
+    { "rank": 1, "label": "연기",   "sentiment": "positive", "count": 640 },
+    { "rank": 2, "label": "스토리", "sentiment": "negative", "count": 541 },
+    { "rank": 3, "label": "연출",   "sentiment": "positive", "count": 487 }
+  ],
+  "recent_activities": [
+    {
+      "movie_id": "mv_001",
+      "movie_title": "파묘",
+      "status": "completed",
+      "completed_at": "2025-05-05T18:22:00+09:00"
+    },
+    {
+      "movie_id": "mv_002",
+      "movie_title": "듄: 파트 2",
+      "status": "completed",
+      "completed_at": "2025-05-05T17:41:00+09:00"
+    }
+  ],
+  "updated_at": "2025-05-05T18:45:00+09:00"
+}
